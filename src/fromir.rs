@@ -10,13 +10,23 @@ pub trait FromIT {
     fn encode<I: AsRef<IR>>(ir: I, variant: Variant) -> Self;
 }
 
-
-impl FromIT for crate::common::Hex {
-    fn identify<I: AsRef<IR>>(ir: I, _variant: Variant) -> bool {
+impl FromIT for crate::common::Base16 {
+    fn identify<I: AsRef<IR>>(_ir: I, _variant: Variant) -> bool {
+        //Any set of bytes can be converted to base 2-16
         true
     }
 
-    fn encode<I: AsRef<IR>>(ir: I, _variant: Variant) -> Self {
-        Self(hex::encode(ir))
+    fn encode<I: AsRef<IR>>(ir: I, variant: Variant) -> Self {
+        let base = Self::get_base(&variant);
+
+        let mut base_n_list = convert_base::Convert::new(256, base).convert::<u8, u8>(ir.as_ref());
+
+        let mut string = String::new();
+
+        for byte in base_n_list.iter_mut() {
+            string.insert(0, Self::num_to_ascii(*byte, true) as char)
+        }
+
+        Self(string)
     }
 }
