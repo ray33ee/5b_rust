@@ -3,9 +3,12 @@ use std::str::FromStr;
 pub type IR = [u8];
 
 ///Convertable types
-pub struct Base16(pub String);
+pub struct Base2_16; //All numbers between base 2 and 16, each base implemented as a variant
+pub struct FixedFloat; //16, 32, 64-bit floats
+pub struct ArbitraryFloat; //Arbitrary precision floats
+pub struct DateTime; //32 and 64-bit unix time
 
-impl Base16 {
+impl Base2_16 {
     pub fn ascii_to_num(byte: u8) -> u8 {
         if byte >= '0' as u8 && byte <= '9' as u8 {
             byte - ('0' as u8)

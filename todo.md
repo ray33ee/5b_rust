@@ -2,23 +2,31 @@
   - This allows an arbitrary number of conversions without having to keep entering data and identifying it
 - ToIR implementations:
   - AScii/unicode string
+    - AScii/unicode character  
   - All possible bases (using BaseCrack API)
   - Python string formatted bytes list
-  - 16, 32 and 64-bit floats
   - DateTime (Variants: all common RFC formats, custom format)
   - IpV4, IpV6 (variant: optional 16-bit port)
   - GUID
   - Html colours
   - List of bytes (hex or decimal formatted)
+  - Disassembly (16, 32 and 64-bit)
 - FromIR implementations:
   - AScii/unicode string
+    - AScii/unicode character
   - All possible bases (using BaseCrack API)
   - Python string formatted bytes list
-  - 16, 32 and 64-bit floats
   - DateTime
   - IpV4, IpV6
   - GUID
   - All combinations of signed/unsigned 8, 16, 32, 64 and 128 bit integers
   - Colours
   - List of bytes (hex or decimal formatted)
+  - Disassembly (16, 32 and 64-bit)
 - Throw in a nice looking ascii table for good measure  
+- Modify the Base2_16 to allow variants for lower and upper case formatting
+  - This will only affect `FromIR` since `ToIR` will accept a mix of upper and lower case
+  - Should this be a variant? It's not really different enough to be a variant.
+    - It should be separate from a variant
+    - add 'Options' argument to FromIR that allows user to specify formatting.
+      - This is distinct from variants, variants treat the IR differently, whereas Options all treat the IR the same way, they just format it into a string differently

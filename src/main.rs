@@ -3,19 +3,19 @@ mod fromir;
 mod toir;
 
 use fromir::FromIT;
-use toir::ToIT;
+use toir::ToIR;
 use crate::common::Variant;
 
 fn main() {
     println!("Hello, world!");
 
-    let data = common::Base16::decode("ffffffffffffffffff", Variant("16")).to_vec();
+    let data = common::Base2_16::decode("60B2959D", Variant("16")).to_vec();
 
-    println!("data: {:?}", data);
+    println!("data: {:?}", u32::encode(&data, Variant("")));
 
-    let base16 = common::Base16::encode(data, Variant("2"));
+    let result = common::DateTime::encode(&data, Variant("32"));
 
-    println!("number: {:?}", base16.0);
+    println!("number: {:?}", result);
 
 
 }
