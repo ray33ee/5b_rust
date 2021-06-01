@@ -1,10 +1,12 @@
 
 use std::boxed::Box;
-use crate::common::{Variant, IR, Information, DateTime};
+use crate::common::{Variant, Information, DateTime};
 use std::str::FromStr;
 use half::f16;
 use chrono::format::Numeric::Day;
 use std::env::var;
+use std::num::ParseIntError;
+use std::convert::TryInto;
 
 //A trait that defines functions to convert from & str to IR
 pub trait ToIR {
@@ -13,7 +15,7 @@ pub trait ToIR {
     fn identify(value: & str) -> Vec<Variant>;
 
     ///Used to convert an IR to Self. NOTE: this function does NOT check to make sure that the IR can be converted, and will panic if the conversion fails
-    fn decode(value: & str, variant: Variant) -> Box<IR>;
+    fn decode(value: & str, variant: Variant) -> Vec<u8>;
 
     ///Function returns information about the type
     fn info() -> Information;
@@ -54,7 +56,7 @@ impl ToIR for crate::common::Base2_16 {
 
     }
 
-    fn decode(value: &str, variant: Variant) -> Box<IR> {
+    fn decode(value: &str, variant: Variant) -> Vec<u8> {
         let base = Self::get_base(&variant);
 
         //Convert ascii bytes 0-9a-fA-F into digits
@@ -62,7 +64,7 @@ impl ToIR for crate::common::Base2_16 {
             .rev()
             .map(|&byte| Self::ascii_to_num(byte)).collect();
 
-        convert_base::Convert::new(base, 256).convert::<u8, u8>(& input).into_boxed_slice()
+        convert_base::Convert::new(base, 256).convert::<u8, u8>(& input)
     }
 
     fn info() -> Information {
@@ -81,7 +83,7 @@ impl ToIR for crate::common::FixedFloat {
         }
     }
 
-    fn decode(value: &str, variant: Variant) -> Box<IR> {
+    fn decode(value: &str, variant: Variant) ->  Vec<u8> {
 
         let number = f64::from_str(value).unwrap();
 
@@ -92,7 +94,7 @@ impl ToIR for crate::common::FixedFloat {
             _ => panic!("Invalid variant in FixedFloat")
         };
 
-        bytes.into_boxed_slice()
+        bytes
     }
 
     fn info() -> Information {
@@ -119,7 +121,7 @@ impl ToIR for crate::common::DateTime {
 
     }
 
-    fn decode(value: &str, variant: Variant) -> Box<IR> {
+    fn decode(value: &str, variant: Variant) -> Vec<u8> {
         let datetime = match &(variant.0)[0..7] {
             "rfc2822" => chrono::DateTime::parse_from_rfc2822(value),
             "rfc3339" => chrono::DateTime::parse_from_rfc3339(value),
@@ -129,8 +131,8 @@ impl ToIR for crate::common::DateTime {
         let timestamp = datetime.timestamp();
 
         match &(variant.0)[8..10] {
-            "32" => Vec::from((timestamp as i32).to_le_bytes()).into_boxed_slice(),
-            "64" => Vec::from(timestamp.to_le_bytes()).into_boxed_slice(),
+            "32" => Vec::from((timestamp as i32).to_le_bytes()),
+            "64" => Vec::from(timestamp.to_le_bytes()),
             _ => panic!("Invalid size variant in DateTime ToIR"),
         }
     }
@@ -139,3 +141,201 @@ impl ToIR for crate::common::DateTime {
         Information::new("unix date time")
     }
 }
+
+impl ToIR for crate::common::FixedInt {
+    fn identify(value: &str) -> Vec<Variant> {
+
+        let mut variants = vec![];
+
+        if i128::from_str(value).is_ok() {
+            variants.insert(0, Variant("i128"));
+        }
+
+        if u128::from_str(value).is_ok() {
+            variants.insert(0, Variant("u128"));
+        }
+
+        if i64::from_str(value).is_ok() {
+            variants.insert(0, Variant("i64"));
+        }
+
+        if u64::from_str(value).is_ok() {
+            variants.insert(0, Variant("u64"));
+        }
+
+        if i32::from_str(value).is_ok() {
+            variants.insert(0, Variant("i32"));
+        }
+
+        if u32::from_str(value).is_ok() {
+            variants.insert(0, Variant("u32"));
+        }
+
+        if i16::from_str(value).is_ok() {
+            variants.insert(0, Variant("i16"));
+        }
+
+        if u16::from_str(value).is_ok() {
+            variants.insert(0, Variant("u16"));
+        }
+
+        if i8::from_str(value).is_ok() {
+            variants.insert(0, Variant("i8"));
+        }
+
+        if u8::from_str(value).is_ok() {
+            variants.insert(0, Variant("u8"));
+        }
+
+        variants
+    }
+
+    fn decode(value: &str, variant: Variant) -> Vec<u8> {
+        match variant.0 {
+            "i8" => vec![i8::from_str(value).unwrap() as u8],
+            "i16" => Vec::from(i16::from_str(value).unwrap().to_le_bytes()),
+            "i32" => Vec::from(i32::from_str(value).unwrap().to_le_bytes()),
+            "i64" => Vec::from(i64::from_str(value).unwrap().to_le_bytes()),
+            "i128" => Vec::from(i128::from_str(value).unwrap().to_le_bytes()),
+            "u8" => vec![u8::from_str(value).unwrap()],
+            "u16" => Vec::from(u16::from_str(value).unwrap().to_le_bytes()),
+            "u32" => Vec::from(u32::from_str(value).unwrap().to_le_bytes()),
+            "u64" => Vec::from(u64::from_str(value).unwrap().to_le_bytes()),
+            "u128" => Vec::from(u128::from_str(value).unwrap().to_le_bytes()),
+            _ => panic!("Invalid variant in ToIR FixedInt")
+        }
+    }
+
+    fn info() -> Information {
+        unimplemented!()
+    }
+}
+
+impl ToIR for crate::common::Unicode8 {
+    fn identify(_value: &str) -> Vec<Variant> {
+        vec![Variant("")]
+    }
+
+    fn decode(value: &str, variant: Variant) -> Vec<u8> {
+        if variant.0 == "" {
+            unsafe {
+                String::from(value).as_mut_vec().clone()
+            }
+        } else {
+            vec![]
+        }
+    }
+
+    fn info() -> Information {
+        unimplemented!()
+    }
+}
+
+impl ToIR for crate::common::IpV4 {
+    fn identify(value: &str) -> Vec<Variant> {
+        if value.parse::<std::net::SocketAddrV4>().is_ok() {
+            return vec![Variant("with port")];
+        }
+
+        if value.parse::<std::net::Ipv4Addr>().is_ok() {
+            return vec![Variant("without port")];
+        }
+
+
+        vec![]
+    }
+
+    fn decode(value: &str, variant: Variant) -> Vec<u8> {
+
+        let mut result = Vec::new();
+
+        let (ipaddr, op_port) = match variant.0 {
+            "with port" => {
+                let socket = value.parse::<std::net::SocketAddrV4>().unwrap();
+
+                (socket.ip().clone(), Some(socket.port()))
+            },
+            "without port" => {
+                let ip = value.parse::<std::net::Ipv4Addr>().unwrap();
+
+                (ip, None)
+            },
+            _ => panic!("Invalid variant in ToIR IpV4"),
+        };
+
+        result.extend_from_slice(&ipaddr.octets());
+
+        if let Some(port) = op_port {
+            result.extend_from_slice(&port.to_le_bytes());
+        }
+
+        result
+    }
+
+    fn info() -> Information {
+        unimplemented!()
+    }
+}
+
+impl ToIR for crate::common::IpV6 {
+    fn identify(value: &str) -> Vec<Variant> {
+        if value.parse::<std::net::SocketAddrV6>().is_ok() {
+            return vec![Variant("with port")];
+        }
+
+        if value.parse::<std::net::Ipv6Addr>().is_ok() {
+            return vec![Variant("without port")];
+        }
+
+        vec![]
+    }
+
+    fn decode(value: &str, variant: Variant) -> Vec<u8> {
+
+        let mut result = Vec::new();
+
+        let (ipaddr, op_port) = match variant.0 {
+            "with port" => {
+                let socket = value.parse::<std::net::SocketAddrV6>().unwrap();
+
+                (socket.ip().clone(), Some(socket.port()))
+            },
+            "without port" => {
+                let ip = value.parse::<std::net::Ipv6Addr>().unwrap();
+
+                (ip, None)
+            },
+            _ => panic!("Invalid variant in ToIR IpV6"),
+        };
+
+        result.extend_from_slice(&ipaddr.octets());
+
+        if let Some(port) = op_port {
+            result.extend_from_slice(&port.to_le_bytes());
+        }
+
+        result
+    }
+
+    fn info() -> Information {
+        unimplemented!()
+    }
+}
+
+/*
+
+impl ToIR for crate::common:: {
+    fn identify(_value: &str) -> Vec<Variant> {
+        unimplemented!()
+    }
+
+    fn decode(value: &str, variant: Variant) -> Vec<u8> {
+        unimplemented!()
+    }
+
+    fn info() -> Information {
+        unimplemented!()
+    }
+}
+
+ */
