@@ -7,7 +7,14 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-base64 = "0.13.0"
 convert-base = "1.1.1"
 half = "1.7.1"
 chrono = "0.4.19"
+base91 = "0.0.1"
+base64 = "0.13.0"
+z85 = "3.0.2"
+ascii85 = "0.2.1"
+regex = "1.5.4"
+lazy_static = "1.4.0"
+uuid = "0.8.2"
+crypto-hash = "0.3.4"

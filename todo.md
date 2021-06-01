@@ -1,26 +1,26 @@
 - For a given input display all possible conversions. Allow the user to change the input to one of these conversions.
   - This allows an arbitrary number of conversions without having to keep entering data and identifying it
 - ToIR implementations:
-  - All possible bases (using BaseCrack API)
   - Python string formatted bytes list
   - GUID
   - Html colours
-  - List of bytes (decimal formatted)
   - File path (load bytes from file)
+  - Encryption/Decryption
+  - File compression
 - FromIR implementations:
-  - All possible bases (using BaseCrack API)
   - Python string formatted bytes list
   - GUID
   - Colours
-  - List of bytes (decimal formatted)
   - Disassembly (16, 32 and 64-bit)
   - File path (save bytes from file)
+  - Encryption/Decryption
+  - File compression
 - Throw in a nice looking ascii table for good measure  
 - Modify the Base2_16 to allow variants for lower and upper case formatting
   - This will only affect `FromIR` since `ToIR` will accept a mix of upper and lower case
-  - Should this be a variant? It's not really different enough to be a variant.
-    - It should be separate from a variant
-    - add 'Options' argument to FromIR that allows user to specify formatting.
-      - This is distinct from variants, variants treat the IR differently, whereas Options all treat the IR the same way, they just format it into a string differently
-- Create a single FixedInteger struct that represents signed/unsigned 8, 16, 32, 64 and 128 bit numbers (format as decimals)  
 - Big/little endian-nes should be selected by reversing the IR 
+- Ignore whitespace with certain types (numbers)
+- Provide a mantissa/exponent variant for FromIr Floats
+- Find out why Ascii85 gives a 'attempt to multiply with overflow' panic when decoding
+- Create an iterator over a string that converts escaped strings into bytes list
+  - Create a function to convert bytes into escaped characters

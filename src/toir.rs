@@ -1,12 +1,11 @@
 
 use std::boxed::Box;
-use crate::common::{Variant, Information, DateTime};
+use crate::common::{Variant, Information};
 use std::str::FromStr;
 use half::f16;
-use chrono::format::Numeric::Day;
+use lazy_static::lazy_static;
+use regex::Regex;
 use std::env::var;
-use std::num::ParseIntError;
-use std::convert::TryInto;
 
 //A trait that defines functions to convert from & str to IR
 pub trait ToIR {
@@ -46,7 +45,7 @@ impl ToIR for crate::common::Base2_16 {
 
             let n = if largest == 0 as u8 { 0 } else {largest - 1};
 
-            let possible_bases= [Variant("2"), Variant("3"), Variant("4"), Variant("5"), Variant("6"), Variant("7"), Variant("8"), Variant("9"), Variant("10"), Variant("11"), Variant("12"), Variant("13"), Variant("14"), Variant("15"), Variant("16")];
+            let possible_bases= [Variant("Base 2"), Variant("Base 3"), Variant("Base 4"), Variant("Base 5"), Variant("Base 6"), Variant("Base 7"), Variant("Base 8"), Variant("Base 9"), Variant("Base 10"), Variant("Base 11"), Variant("Base 12"), Variant("Base 13"), Variant("Base 14"), Variant("Base 15"), Variant("Base 16")];
 
             let variants = Vec::from(&possible_bases[n as usize..]);
 
@@ -77,7 +76,7 @@ impl ToIR for crate::common::FixedFloat {
     fn identify(value: &str) -> Vec<Variant> {
         //If conversion to f64 succeeds, then conversion to f32 and f16 will also succeed
         if f64::from_str(value).is_ok() {
-            vec![Variant("32"), Variant("16"), Variant("64"), ]
+            vec![Variant("32-bit"), Variant("16-bit"), Variant("64-bit"), ]
         } else {
             vec![]
         }
@@ -88,9 +87,9 @@ impl ToIR for crate::common::FixedFloat {
         let number = f64::from_str(value).unwrap();
 
         let bytes = match variant.0 {
-            "16" => Vec::from(f16::from_f64(number).to_le_bytes()),
-            "32" => Vec::from((number as f32).to_le_bytes()),
-            "64" => Vec::from(number.to_le_bytes()),
+            "16-bit" => Vec::from(f16::from_f64(number).to_le_bytes()),
+            "32-bit" => Vec::from((number as f32).to_le_bytes()),
+            "64-bit" => Vec::from(number.to_le_bytes()),
             _ => panic!("Invalid variant in FixedFloat")
         };
 
@@ -108,13 +107,13 @@ impl ToIR for crate::common::DateTime {
         let mut variants = Vec::new();
 
         if chrono::DateTime::parse_from_rfc2822(value).is_ok() {
-            variants.push(Variant("rfc2822-32"));
-            variants.push(Variant("rfc2822-64"));
+            variants.push(Variant("32-bit rfc2822"));
+            variants.push(Variant("64-bit rfc2822"));
         }
 
         if chrono::DateTime::parse_from_rfc3339(value).is_ok() {
-            variants.push(Variant("rfc3339-32"));
-            variants.push(Variant("rfc3339-64"));
+            variants.push(Variant("32-bit rfc3339"));
+            variants.push(Variant("64-bit rfc3339"));
         }
 
         variants
@@ -122,7 +121,7 @@ impl ToIR for crate::common::DateTime {
     }
 
     fn decode(value: &str, variant: Variant) -> Vec<u8> {
-        let datetime = match &(variant.0)[0..7] {
+        let datetime = match &(variant.0)[7..14] {
             "rfc2822" => chrono::DateTime::parse_from_rfc2822(value),
             "rfc3339" => chrono::DateTime::parse_from_rfc3339(value),
             _ => panic!("Invalid rfc variant in DateTime ToIR")
@@ -130,7 +129,7 @@ impl ToIR for crate::common::DateTime {
 
         let timestamp = datetime.timestamp();
 
-        match &(variant.0)[8..10] {
+        match &(variant.0)[0..2] {
             "32" => Vec::from((timestamp as i32).to_le_bytes()),
             "64" => Vec::from(timestamp.to_le_bytes()),
             _ => panic!("Invalid size variant in DateTime ToIR"),
@@ -322,10 +321,181 @@ impl ToIR for crate::common::IpV6 {
     }
 }
 
+impl ToIR for crate::common::Base91 {
+    fn identify(_value: &str) -> Vec<Variant> {
+        vec![Variant("")]
+    }
+
+    fn decode(value: &str, _variant: Variant) -> Vec<u8> {
+        base91::slice_decode(value.as_bytes())
+    }
+
+    fn info() -> Information {
+        unimplemented!()
+    }
+}
+
+impl ToIR for crate::common::Base85 {
+    fn identify(value: &str) -> Vec<Variant> {
+        let mut variants = Vec::new();
+
+        if z85::decode(value.as_bytes()).is_ok() {
+            variants.push(Variant("z85"));
+        }
+
+        /*if ascii85::decode(value).is_ok() {
+            variants.push(Variant("ascii85"));
+        }*/
+
+        variants
+    }
+
+    fn decode(value: &str, variant: Variant) -> Vec<u8> {
+
+        match variant.0 {
+            "z85" => z85::decode(value.as_bytes()).unwrap(),
+            "ascii85" => panic!("Due to an issue with with the ascii85 crate, this is not suported"), //ascii85::decode(value).unwrap(),
+            _ => panic!("Invalid variant in ToIR Base85")
+        }
+    }
+
+    fn info() -> Information {
+        unimplemented!()
+    }
+}
+
+impl ToIR for crate::common::Base64 {
+    fn identify(value: &str) -> Vec<Variant> {
+        let mut variants = Vec::new();
+
+        if base64::decode_config(value, base64::BCRYPT).is_ok() {
+            variants.push(Variant("Bcrypt"));
+        }
+
+        if base64::decode_config(value, base64::BINHEX).is_ok() {
+            variants.push(Variant("BinHex"));
+        }
+
+        if base64::decode_config(value, base64::CRYPT).is_ok() {
+            variants.push(Variant("crypt"));
+        }
+
+        if base64::decode_config(value, base64::IMAP_MUTF7).is_ok() {
+            variants.push(Variant("IMAP UTF-7"));
+        }
+
+        if base64::decode_config(value, base64::STANDARD).is_ok() {
+            variants.push(Variant("Standard"));
+        }
+
+        if base64::decode_config(value, base64::STANDARD_NO_PAD).is_ok() {
+            variants.push(Variant("Standard no padding"));
+        }
+
+        if base64::decode_config(value, base64::URL_SAFE).is_ok() {
+            variants.push(Variant("URL-safe"));
+        }
+
+        if base64::decode_config(value, base64::URL_SAFE_NO_PAD).is_ok() {
+            variants.push(Variant("URL-safe no padding"));
+        }
+
+        variants
+    }
+
+    fn decode(value: &str, variant: Variant) -> Vec<u8> {
+        match variant.0 {
+            "Bcrypt" => base64::decode_config(value, base64::BCRYPT).unwrap(),
+            "BinHex" => base64::decode_config(value, base64::BINHEX).unwrap(),
+            "crypt" => base64::decode_config(value, base64::CRYPT).unwrap(),
+            "IMAP UTF-7" => base64::decode_config(value, base64::IMAP_MUTF7).unwrap(),
+            "Standard" => base64::decode_config(value, base64::STANDARD).unwrap(),
+            "Standard no padding" => base64::decode_config(value, base64::STANDARD_NO_PAD).unwrap(),
+            "URL-safe" => base64::decode_config(value, base64::STANDARD_NO_PAD).unwrap(),
+            "URL-safe no padding" => base64::decode_config(value, base64::URL_SAFE_NO_PAD).unwrap(),
+            _ => panic!("Invalid variant in ToIr Base64"),
+        }
+    }
+
+    fn info() -> Information {
+        unimplemented!()
+    }
+}
+
+impl ToIR for crate::common::ByteList {
+    fn identify(value: &str) -> Vec<Variant> {
+        //Remove whitespace
+
+        lazy_static! {
+            static ref RE: Regex = Regex::new("\\[(([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5]),)*([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5]),?\\]").unwrap();
+            static ref Whitespace: Regex = Regex::new("\\s").unwrap();
+        }
+
+        let cleaned = Whitespace.replace_all(value, "");
+
+        if RE.is_match(&cleaned) {
+            vec![Variant("")]
+        } else {
+            Vec::new()
+        }
+    }
+
+    fn decode(value: &str, variant: Variant) -> Vec<u8> {
+
+        let mut  bytes = Vec::new();
+
+        lazy_static! {
+            static ref Comma: Regex = Regex::new(",").unwrap();
+            static ref Whitespace: Regex = Regex::new("\\s").unwrap();
+        }
+
+        let cleaned = Whitespace.replace_all(value, "");
+
+        let value = &cleaned[1..cleaned.len()-1];
+
+        for str_number in Comma.split(value) {
+            if let Ok(number) = u8::from_str(str_number) {
+                bytes.push(number);
+            }
+        }
+
+        bytes
+
+    }
+
+    fn info() -> Information {
+        unimplemented!()
+    }
+}
+
+impl ToIR for crate::common::UUID {
+    fn identify(value: &str) -> Vec<Variant> {
+        if uuid::Uuid::parse_str(value).is_ok() {
+            vec![Variant("")]
+        } else {
+            vec![]
+        }
+    }
+
+    fn decode(value: &str, variant: Variant) -> Vec<u8> {
+        if variant.0 == "" {
+            let id = uuid::Uuid::parse_str(value).unwrap();
+
+            Vec::from(id.as_u128().to_le_bytes())
+        } else {
+            panic!("Invalid variant in ToIR UUID");
+        }
+    }
+
+    fn info() -> Information {
+        unimplemented!()
+    }
+}
+
 /*
 
 impl ToIR for crate::common:: {
-    fn identify(_value: &str) -> Vec<Variant> {
+    fn identify(value: &str) -> Vec<Variant> {
         unimplemented!()
     }
 
