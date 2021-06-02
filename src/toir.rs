@@ -492,6 +492,28 @@ impl ToIR for crate::common::UUID {
     }
 }
 
+impl ToIR for crate::common::EscapedString {
+    fn identify(value: &str) -> Vec<Variant> {
+        if crate::escape::EscapedString::ascii_to_bytes(value).is_ok() {
+            vec![Variant("")]
+        } else {
+            vec![]
+        }
+    }
+
+    fn decode(value: &str, variant: Variant) -> Vec<u8> {
+        if variant.0 == "" {
+            crate::escape::EscapedString::ascii_to_bytes(value).unwrap()
+        } else {
+            panic!("Invalid variant in ToIR EscapedString");
+        }
+    }
+
+    fn info() -> Information {
+        unimplemented!()
+    }
+}
+
 /*
 
 impl ToIR for crate::common:: {

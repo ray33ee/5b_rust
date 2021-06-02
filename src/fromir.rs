@@ -307,6 +307,38 @@ impl FromIT for crate::common::Hash {
     }
 }
 
+impl FromIT for crate::common::UUID {
+    fn variants(ir: &[u8]) -> Vec<Variant> {
+        if uuid::Uuid::from_slice(ir).is_ok() {
+            vec![Variant("")]
+        } else {
+            vec![]
+        }
+    }
+
+    fn encode(ir: &[u8], variant: Variant) -> String {
+        if variant.0 == "" {
+            uuid::Uuid::from_slice(ir).unwrap().to_string()
+        } else {
+            panic!("Invalid variant in FromIT uuid")
+        }
+    }
+}
+
+impl FromIT for crate::common::EscapedString {
+    fn variants(_ir: &[u8]) -> Vec<Variant> {
+        vec![Variant("")]
+    }
+
+    fn encode(ir: &[u8], variant: Variant) -> String {
+        if variant.0 == "" {
+            crate::escape::EscapedString::bytes_to_ascii(ir)
+        } else {
+            panic!("Invalid variant in FromIR EscapedString");
+        }
+    }
+}
+
 /*
 
 impl FromIT for crate::common:: {

@@ -15,6 +15,7 @@ pub struct Base91;
 pub struct ByteList;
 pub struct UUID;
 pub struct Hash;
+pub struct EscapedString;
 
 impl Base2_16 {
     pub fn ascii_to_num(byte: u8) -> u8 {
@@ -37,6 +38,10 @@ impl Base2_16 {
                 byte - 10 + ('a' as u8)
             }
         }
+    }
+
+    pub fn is_hex(byte: u8) -> bool {
+        byte >= '0' as u8 && byte <= '9' as u8 || byte >= 'a' as u8 && byte <= 'f' as u8 || byte >= 'A' as u8 && byte <= 'F' as u8
     }
 
     pub fn get_base(variant: & Variant) -> u64 {
