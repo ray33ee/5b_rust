@@ -1,23 +1,18 @@
 
-use std::boxed::Box;
-use crate::common::{Variant, Information};
+use crate::common::{Variant};
 use std::str::FromStr;
 use half::f16;
 use lazy_static::lazy_static;
 use regex::Regex;
-use std::env::var;
 
 //A trait that defines functions to convert from & str to IR
 pub trait ToIR {
 
     ///Used to test to see whether the input string can be converted to Self and return a set of variants that match the value
-    fn identify(value: & str) -> Vec<Variant>;
+    fn identify(value: & str) -> Option<Vec<Variant>>;
 
     ///Used to convert an IR to Self. NOTE: this function does NOT check to make sure that the IR can be converted, and will panic if the conversion fails
     fn decode(value: & str, variant: Variant) -> Vec<u8>;
-
-    ///Function returns information about the type
-    fn info() -> Information;
 }
 
 ///Numbers from base 2 to base 16 using 0-9 and a-f
@@ -25,7 +20,14 @@ impl ToIR for crate::common::Base2_16 {
 
     //Todo: If the string is prefixed with 0x, 0o or ob, treat them as hex, octal and binary, respectively. And if it doesn't correctly convert to the specified type, return Err(())
     //Todo: Since dec, hex, bin and oct are the most likely bases (in that order) we reorder the variant list to show this
-    fn identify(value: &str) -> Vec<Variant> {
+    fn identify(value: &str) -> Option<Vec<Variant>> {
+
+        match &value[0..2] {
+            "0b" => return Some(vec![Variant("Base 2")]),
+            "0o" => return Some(vec![Variant("Base 8")]),
+            "0x" => return Some(vec![Variant("Base 16")]),
+            _ => {}
+        }
 
         let is_valid_base16 = value.as_bytes().iter().fold(true, |acc, &x| {
             acc && ((x >= '0' as u8 && x <= '9' as u8) || (x >= 'a' as u8 && x <= 'f' as u8) || (x >= 'A' as u8 && x <= 'F' as u8))
@@ -33,7 +35,7 @@ impl ToIR for crate::common::Base2_16 {
 
         //If the number does not convert to Hexadecimal, it cannot be valid base 16 or lower
         if !is_valid_base16 {
-            return Vec::new();
+            return None;
         } else { //Get a list of all possible bases, based on the largest digit. (for example if the largest digit is 1, then it could be base 2 or more. If the largest digit is 7,, it could be base 8 or more)
 
             let largest = value
@@ -43,19 +45,37 @@ impl ToIR for crate::common::Base2_16 {
                 .max()
                 .unwrap_or(0);
 
-            let n = if largest == 0 as u8 { 0 } else {largest - 1};
+            let possible_bases= [Variant("Base 2"), //Variant("Base 3"), Variant("Base 4"), Variant("Base 5"), Variant("Base 6"), Variant("Base 7"),
+                Variant("Base 8"), //Variant("Base 9"),
+                Variant("Base 10"), //Variant("Base 11"), Variant("Base 12"), Variant("Base 13"), Variant("Base 14"), Variant("Base 15"),
+                Variant("Base 16")
+            ];
 
-            let possible_bases= [Variant("Base 2"), Variant("Base 3"), Variant("Base 4"), Variant("Base 5"), Variant("Base 6"), Variant("Base 7"), Variant("Base 8"), Variant("Base 9"), Variant("Base 10"), Variant("Base 11"), Variant("Base 12"), Variant("Base 13"), Variant("Base 14"), Variant("Base 15"), Variant("Base 16")];
+            let index = if largest < 2 {
+                    0
+                } else if largest >= 2 && largest < 8 {
+                    1
+                } else if largest >= 8 && largest < 10 {
+                    2
+                } else {
+                    3
+                }
+            ;
 
-            let variants = Vec::from(&possible_bases[n as usize..]);
+            let variants = Vec::from(&possible_bases[index..]);
 
-            variants
+            Some(variants)
 
         }
 
     }
 
-    fn decode(value: &str, variant: Variant) -> Vec<u8> {
+    fn decode(mut value: &str, variant: Variant) -> Vec<u8> {
+
+        if &value[0..2] == "0b" || &value[0..2] == "0o" || &value[0..2] == "0x" {
+            value = &value[2..];
+        }
+
         let base = Self::get_base(&variant);
 
         //Convert ascii bytes 0-9a-fA-F into digits
@@ -65,20 +85,16 @@ impl ToIR for crate::common::Base2_16 {
 
         convert_base::Convert::new(base, 256).convert::<u8, u8>(& input)
     }
-
-    fn info() -> Information {
-        Information::new("base 2-16")
-    }
 }
 
 ///All common fixed precision floating point numbers (16, 32 and 64-bit)
 impl ToIR for crate::common::FixedFloat {
-    fn identify(value: &str) -> Vec<Variant> {
+    fn identify(value: &str) -> Option<Vec<Variant>> {
         //If conversion to f64 succeeds, then conversion to f32 and f16 will also succeed
         if f64::from_str(value).is_ok() {
-            vec![Variant("32-bit"), Variant("16-bit"), Variant("64-bit"), ]
+            Some(vec![Variant("32-bit"), Variant("16-bit"), Variant("64-bit"),])
         } else {
-            vec![]
+            None
         }
     }
 
@@ -95,14 +111,10 @@ impl ToIR for crate::common::FixedFloat {
 
         bytes
     }
-
-    fn info() -> Information {
-        Information::new("fixed precision float")
-    }
 }
 
 impl ToIR for crate::common::DateTime {
-    fn identify(value: &str) -> Vec<Variant> {
+    fn identify(value: &str) -> Option<Vec<Variant>> {
 
         let mut variants = Vec::new();
 
@@ -116,8 +128,11 @@ impl ToIR for crate::common::DateTime {
             variants.push(Variant("64-bit rfc3339"));
         }
 
-        variants
-
+        if variants.is_empty() {
+            None
+        } else {
+            Some(variants)
+        }
     }
 
     fn decode(value: &str, variant: Variant) -> Vec<u8> {
@@ -135,14 +150,10 @@ impl ToIR for crate::common::DateTime {
             _ => panic!("Invalid size variant in DateTime ToIR"),
         }
     }
-
-    fn info() -> Information {
-        Information::new("unix date time")
-    }
 }
 
 impl ToIR for crate::common::FixedInt {
-    fn identify(value: &str) -> Vec<Variant> {
+    fn identify(value: &str) -> Option<Vec<Variant>> {
 
         let mut variants = vec![];
 
@@ -186,7 +197,12 @@ impl ToIR for crate::common::FixedInt {
             variants.insert(0, Variant("u8"));
         }
 
-        variants
+
+        if variants.is_empty() {
+            None
+        } else {
+            Some(variants)
+        }
     }
 
     fn decode(value: &str, variant: Variant) -> Vec<u8> {
@@ -204,15 +220,11 @@ impl ToIR for crate::common::FixedInt {
             _ => panic!("Invalid variant in ToIR FixedInt")
         }
     }
-
-    fn info() -> Information {
-        unimplemented!()
-    }
 }
 
 impl ToIR for crate::common::Unicode8 {
-    fn identify(_value: &str) -> Vec<Variant> {
-        vec![Variant("")]
+    fn identify(_value: &str) -> Option<Vec<Variant>> {
+        Some(vec![Variant("")])
     }
 
     fn decode(value: &str, variant: Variant) -> Vec<u8> {
@@ -221,27 +233,22 @@ impl ToIR for crate::common::Unicode8 {
                 String::from(value).as_mut_vec().clone()
             }
         } else {
-            vec![]
+            panic!("Invalid variant in ToIR Unicode8");
         }
-    }
-
-    fn info() -> Information {
-        unimplemented!()
     }
 }
 
 impl ToIR for crate::common::IpV4 {
-    fn identify(value: &str) -> Vec<Variant> {
+    fn identify(value: &str) -> Option<Vec<Variant>> {
         if value.parse::<std::net::SocketAddrV4>().is_ok() {
-            return vec![Variant("with port")];
+            return Some(vec![Variant("with port")]);
         }
 
         if value.parse::<std::net::Ipv4Addr>().is_ok() {
-            return vec![Variant("without port")];
+            return Some(vec![Variant("without port")]);
         }
 
-
-        vec![]
+        None
     }
 
     fn decode(value: &str, variant: Variant) -> Vec<u8> {
@@ -262,31 +269,29 @@ impl ToIR for crate::common::IpV4 {
             _ => panic!("Invalid variant in ToIR IpV4"),
         };
 
-        result.extend_from_slice(&ipaddr.octets());
-
         if let Some(port) = op_port {
-            result.extend_from_slice(&port.to_le_bytes());
+            result.extend_from_slice(&port.to_be_bytes());
         }
 
-        result
-    }
+        result.extend_from_slice(&ipaddr.octets());
 
-    fn info() -> Information {
-        unimplemented!()
+        result.reverse();
+
+        result
     }
 }
 
 impl ToIR for crate::common::IpV6 {
-    fn identify(value: &str) -> Vec<Variant> {
+    fn identify(value: &str) -> Option<Vec<Variant>> {
         if value.parse::<std::net::SocketAddrV6>().is_ok() {
-            return vec![Variant("with port")];
+            return Some(vec![Variant("with port")]);
         }
 
         if value.parse::<std::net::Ipv6Addr>().is_ok() {
-            return vec![Variant("without port")];
+            return Some(vec![Variant("without port")]);
         }
 
-        vec![]
+        None
     }
 
     fn decode(value: &str, variant: Variant) -> Vec<u8> {
@@ -307,36 +312,30 @@ impl ToIR for crate::common::IpV6 {
             _ => panic!("Invalid variant in ToIR IpV6"),
         };
 
-        result.extend_from_slice(&ipaddr.octets());
-
         if let Some(port) = op_port {
-            result.extend_from_slice(&port.to_le_bytes());
+            result.extend_from_slice(&port.to_be_bytes());
         }
 
-        result
-    }
+        result.extend_from_slice(&ipaddr.octets());
 
-    fn info() -> Information {
-        unimplemented!()
+        result.reverse();
+
+        result
     }
 }
 
 impl ToIR for crate::common::Base91 {
-    fn identify(_value: &str) -> Vec<Variant> {
-        vec![Variant("")]
+    fn identify(_value: &str) -> Option<Vec<Variant>> {
+        Some(vec![Variant("")])
     }
 
     fn decode(value: &str, _variant: Variant) -> Vec<u8> {
         base91::slice_decode(value.as_bytes())
     }
-
-    fn info() -> Information {
-        unimplemented!()
-    }
 }
 
 impl ToIR for crate::common::Base85 {
-    fn identify(value: &str) -> Vec<Variant> {
+    fn identify(value: &str) -> Option<Vec<Variant>> {
         let mut variants = Vec::new();
 
         if z85::decode(value.as_bytes()).is_ok() {
@@ -347,7 +346,12 @@ impl ToIR for crate::common::Base85 {
             variants.push(Variant("ascii85"));
         }*/
 
-        variants
+        if variants.is_empty() {
+            None
+        } else {
+            Some(variants)
+        }
+
     }
 
     fn decode(value: &str, variant: Variant) -> Vec<u8> {
@@ -358,14 +362,10 @@ impl ToIR for crate::common::Base85 {
             _ => panic!("Invalid variant in ToIR Base85")
         }
     }
-
-    fn info() -> Information {
-        unimplemented!()
-    }
 }
 
 impl ToIR for crate::common::Base64 {
-    fn identify(value: &str) -> Vec<Variant> {
+    fn identify(value: &str) -> Option<Vec<Variant>> {
         let mut variants = Vec::new();
 
         if base64::decode_config(value, base64::BCRYPT).is_ok() {
@@ -400,7 +400,11 @@ impl ToIR for crate::common::Base64 {
             variants.push(Variant("URL-safe no padding"));
         }
 
-        variants
+        if variants.is_empty() {
+            None
+        } else {
+            Some(variants)
+        }
     }
 
     fn decode(value: &str, variant: Variant) -> Vec<u8> {
@@ -416,44 +420,40 @@ impl ToIR for crate::common::Base64 {
             _ => panic!("Invalid variant in ToIr Base64"),
         }
     }
-
-    fn info() -> Information {
-        unimplemented!()
-    }
 }
 
 impl ToIR for crate::common::ByteList {
-    fn identify(value: &str) -> Vec<Variant> {
+    fn identify(value: &str) -> Option<Vec<Variant>> {
         //Remove whitespace
 
         lazy_static! {
-            static ref RE: Regex = Regex::new("\\[(([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5]),)*([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5]),?\\]").unwrap();
-            static ref Whitespace: Regex = Regex::new("\\s").unwrap();
+            static ref BYTE_LIST: Regex = Regex::new("\\[(([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5]),)*([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5]),?\\]").unwrap();
+            static ref WHITESPACE: Regex = Regex::new("\\s").unwrap();
         }
 
-        let cleaned = Whitespace.replace_all(value, "");
+        let cleaned = WHITESPACE.replace_all(value, "");
 
-        if RE.is_match(&cleaned) {
-            vec![Variant("")]
+        if BYTE_LIST.is_match(&cleaned) {
+            Some(vec![Variant("")])
         } else {
-            Vec::new()
+            None
         }
     }
 
-    fn decode(value: &str, variant: Variant) -> Vec<u8> {
+    fn decode(value: &str, _variant: Variant) -> Vec<u8> {
 
         let mut  bytes = Vec::new();
 
         lazy_static! {
-            static ref Comma: Regex = Regex::new(",").unwrap();
-            static ref Whitespace: Regex = Regex::new("\\s").unwrap();
+            static ref COMMA: Regex = Regex::new(",").unwrap();
+            static ref WHITESPACE: Regex = Regex::new("\\s").unwrap();
         }
 
-        let cleaned = Whitespace.replace_all(value, "");
+        let cleaned = WHITESPACE.replace_all(value, "");
 
         let value = &cleaned[1..cleaned.len()-1];
 
-        for str_number in Comma.split(value) {
+        for str_number in COMMA.split(value) {
             if let Ok(number) = u8::from_str(str_number) {
                 bytes.push(number);
             }
@@ -462,18 +462,14 @@ impl ToIR for crate::common::ByteList {
         bytes
 
     }
-
-    fn info() -> Information {
-        unimplemented!()
-    }
 }
 
 impl ToIR for crate::common::UUID {
-    fn identify(value: &str) -> Vec<Variant> {
+    fn identify(value: &str) -> Option<Vec<Variant>> {
         if uuid::Uuid::parse_str(value).is_ok() {
-            vec![Variant("")]
+            Some(vec![Variant("")])
         } else {
-            vec![]
+            None
         }
     }
 
@@ -486,46 +482,34 @@ impl ToIR for crate::common::UUID {
             panic!("Invalid variant in ToIR UUID");
         }
     }
-
-    fn info() -> Information {
-        unimplemented!()
-    }
 }
 
 impl ToIR for crate::common::EscapedString {
-    fn identify(value: &str) -> Vec<Variant> {
-        if crate::escape::EscapedString::ascii_to_bytes(value).is_ok() {
-            vec![Variant("")]
+    fn identify(value: &str) -> Option<Vec<Variant>> {
+        if crate::escape::EscapedString::decode(value).is_ok() {
+            Some(vec![Variant("")])
         } else {
-            vec![]
+            None
         }
     }
 
     fn decode(value: &str, variant: Variant) -> Vec<u8> {
         if variant.0 == "" {
-            crate::escape::EscapedString::ascii_to_bytes(value).unwrap()
+            crate::escape::EscapedString::decode(value).unwrap()
         } else {
             panic!("Invalid variant in ToIR EscapedString");
         }
-    }
-
-    fn info() -> Information {
-        unimplemented!()
     }
 }
 
 /*
 
 impl ToIR for crate::common:: {
-    fn identify(value: &str) -> Vec<Variant> {
+    fn identify(value: &str) -> Option<Vec<Variant>> {
         unimplemented!()
     }
 
     fn decode(value: &str, variant: Variant) -> Vec<u8> {
-        unimplemented!()
-    }
-
-    fn info() -> Information {
         unimplemented!()
     }
 }

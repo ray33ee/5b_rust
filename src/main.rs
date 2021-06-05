@@ -1,4 +1,3 @@
-#[macro_use]
 extern crate lazy_static;
 
 mod common;
@@ -8,13 +7,30 @@ mod escape;
 
 use fromir::FromIT;
 use toir::ToIR;
-use crate::common::{Variant, FixedInt, FixedFloat, Base2_16, DateTime, Unicode8, IpV4, IpV6, Base91, Base64, Base85, ByteList, UUID, Hash, EscapedString};
-use std::num::ParseIntError;
+use crate::common::{Variant, FixedInt, FixedFloat, Base2_16, DateTime, Unicode8, IpV4, IpV6, Base91, Base64, Base85, ByteList, UUID, EscapedString, UrlEncode, UrlDecode};
 
+use colour::{blue, yellow};
+
+fn read_without_newline() -> String {
+    let mut string = String::new();
+
+    std::io::stdin().read_line(& mut string).expect("Failed to read from stdin");
+
+    if string.bytes().last().unwrap() == 10 {
+        string.remove(string.len() - 1);
+    }
+
+    if string.bytes().last().unwrap() == 13 {
+        string.remove(string.len() - 1);
+    }
+
+    string
+
+}
 
 fn main() {
 
-    let to_ir: [(fn(& str) -> Vec<Variant>, & str, fn(& str, Variant) -> Vec<u8>); 13] = [
+    let to_ir: [(fn(& str) -> Option<Vec<Variant>>, & str, fn(& str, Variant) -> Vec<u8>); 13] = [
         (IpV4::identify, "Ipv4 address", IpV4::decode),
         (IpV6::identify, "Ipv6 address", IpV6::decode),
         (DateTime::identify, "Unix time", DateTime::decode),
@@ -30,7 +46,7 @@ fn main() {
         (EscapedString::identify, "Escaped character string", EscapedString::decode),
     ];
 
-    let from_ir: [(fn(& [u8]) -> Vec<Variant>, & str, fn(& [u8], Variant) -> String); 13] = [
+    let from_ir: [(fn(& [u8]) -> Option<Vec<Variant>>, & str, fn(& [u8], Variant) -> String); 15] = [
         (IpV4::variants, "Ipv4 address", IpV4::encode),
         (IpV6::variants, "Ipv6 address", IpV6::encode),
         (DateTime::variants, "Unix time", DateTime::encode),
@@ -44,17 +60,15 @@ fn main() {
         (ByteList::variants, "Byte list", ByteList::encode),
         (Unicode8::variants, "Unicode 8 string", Unicode8::encode),
         (EscapedString::variants, "Escaped character string", EscapedString::encode),
+        (UrlEncode::variants, "Encoded URL", UrlEncode::encode),
+        (UrlDecode::variants, "Decoded URL", UrlDecode::encode),
     ];
 
 
 
-    let mut input = String::new();
-
     println!("Please enter the input string:");
 
-    std::io::stdin().read_line(& mut input).expect("Failed to read from stdin");
-
-    input.remove(input.len()-1);
+    let input = read_without_newline();
 
     let mut option_map = Vec::new();
 
@@ -63,26 +77,25 @@ fn main() {
     println!("***************");
 
     for (identifier, name, decoder) in to_ir {
-        let variants = (identifier)(&input);
+        let optional_variants = (identifier)(&input);
 
-        if variants.len() > 0 {
+        if let Some(variants) = optional_variants {
             println!("{}", name);
 
             for variant in variants {
-                println!("    {}     {}", option_map.len(), variant.0);
+                blue!("    {}", option_map.len());
+                println!("     {}", variant.0);
 
                 option_map.push((variant, decoder));
             }
         }
     }
 
-    let mut option = String::new();
-
     println!("Please enter the index of the possible format you would like to use:");
 
-    std::io::stdin().read_line(& mut option).expect("Failed to read from stdin");
+    let option = read_without_newline();
 
-    match (&option[0..option.len()-1]).parse::<usize>() {
+    match option.parse::<usize>() {
         Ok(option) => {
 
             if option >= option_map.len() {
@@ -98,19 +111,20 @@ fn main() {
             println!("**************");
 
             for (variants_function, name, encoder) in from_ir {
-                let variants = (variants_function)(&ir);
+                let optional_variants = (variants_function)(&ir);
 
-                if variants.len() > 0 {
+                if let Some(variants) = optional_variants {
                     println!("{}", name);
 
                     for variant in variants {
-                        println!("    {}    {}", variant.0, (encoder)(&ir, variant.clone()))
+                        yellow!("    {}", variant.0);
+                        println!("    {}", (encoder)(&ir, variant.clone()))
                     }
                 }
             }
         }
         Err(_) => {
-
+            panic!("Invalid number '{:?}'", option.as_bytes());
         }
     }
 

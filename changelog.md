@@ -6,34 +6,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 ### To Do
 
-- For a given input display all possible conversions. Allow the user to change the input to one of these conversions.
-  - This allows an arbitrary number of conversions without having to keep entering data and identifying it
 - ToIR implementations:
-  - Python string formatted bytes list
-  - GUID
   - Html colours
   - File path (load bytes from file)
 - FromIR implementations:
-  - Python string formatted bytes list
-  - GUID
   - Colours
   - Disassembly (16, 32 and 64-bit)
   - File path (save bytes from file)
-- Throw in a nice looking ascii table for good measure
-- Modify the Base2_16 to allow variants for lower and upper case formatting
-  - This will only affect `FromIR` since `ToIR` will accept a mix of upper and lower case
-- Big/little endian-nes should be selected by reversing the IR
+- Add command line options for
+  - Endianness
+  - Hex case formatting
+  - ascii table
 - Ignore whitespace with certain types (numbers)
 - Provide a mantissa/exponent variant for FromIr Floats
-- Find out why Ascii85 gives a 'attempt to multiply with overflow' panic when decoding
-- Create an iterator over a string that converts escaped strings into bytes list
-  - Create a function to convert bytes into escaped characters
-- Improve appearance with tables and colours
+- Convert from Ipv4 to Ipv6 address
 
 ### Unfinished Ideas
 None
 
-## [0.1.0] - 2021-05-05
+## [0.1.1] - 2021-06-02
+### Added
+- Base conversion has been shortened to base 2, 8, 10 and 16
+- Endianness of Ipv4 and Ipv6 is fixed
+- Colour added to terminal output
+- Prefixes 0x, 0b and 0o are now supported
+- URL decoding and encoding added
+- `FromIT::variants` and `ToIR::identify` return an Option<Vec<_>> and return None if no variants match to avoid unnecessary allocations 
+- Warnings cleared
+
+## [0.1.0] - 2021-06-01
 ### Added
 - Readme
 - This changelog

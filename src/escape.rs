@@ -1,4 +1,3 @@
-use std::str::{Chars, CharIndices, from_boxed_utf8_unchecked, from_utf8_unchecked};
 
 #[derive(Debug, Clone)]
 enum Escapes {
@@ -86,19 +85,6 @@ impl<'t> EscapedStringIterator<'t> {
             remaining: string.as_bytes(),
         }
     }
-
-    pub fn is_valid_escaped_string(string: & 't str) -> bool {
-        //Make sure string doesn't contain any unicode characters
-        for byte in string.as_bytes() {
-            if *byte > 128 {
-                return false
-            }
-        }
-        //Make sure any \x is followed by exactly 2 hex characters
-
-
-        true
-    }
 }
 
 impl<'t> Iterator for EscapedStringIterator<'t> {
@@ -143,16 +129,14 @@ impl<'t> Iterator for EscapedStringIterator<'t> {
             slice
         };
 
-        unsafe {
-            Some(Ok(Escapes::from(slice)))
-        }
+        Some(Ok(Escapes::from(slice)))
     }
 }
 
 pub struct EscapedString;
 
 impl EscapedString {
-    pub fn ascii_to_bytes(string: &str) -> Result<Vec<u8>, ()> {
+    pub fn decode(string: &str) -> Result<Vec<u8>, ()> {
         let mut bytes = Vec::new();
 
         for escaped in EscapedStringIterator::new(string) {
@@ -162,7 +146,7 @@ impl EscapedString {
         Ok(bytes)
     }
 
-    pub fn bytes_to_ascii(bytes: & [u8]) -> String {
+    pub fn encode(bytes: & [u8]) -> String {
         let mut string = String::new();
 
         for &byte in bytes {

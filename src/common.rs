@@ -3,7 +3,7 @@ use std::str::FromStr;
 ///Convertable types
 pub struct Base2_16; //All numbers between base 2 and 16, each base implemented as a variant
 pub struct FixedFloat; //16, 32, 64-bit floats
-pub struct ArbitraryFloat; //Arbitrary precision floats
+//pub struct ArbitraryFloat; //Arbitrary precision floats
 pub struct DateTime; //32 and 64-bit unix time
 pub struct FixedInt; //8-128 bit signed/unsigned integer
 pub struct Unicode8;
@@ -16,6 +16,8 @@ pub struct ByteList;
 pub struct UUID;
 pub struct Hash;
 pub struct EscapedString;
+pub struct UrlEncode;
+pub struct UrlDecode;
 
 impl Base2_16 {
     pub fn ascii_to_num(byte: u8) -> u8 {
@@ -51,16 +53,3 @@ impl Base2_16 {
 
 #[derive(Clone, Debug)]
 pub struct Variant(pub & 'static str);
-
-///Constains metadata about a type T to aid in conversion
-pub struct Information {
-    identifier: & 'static str,
-}
-
-impl Information {
-    pub fn new(identifier: & 'static str) -> Self {
-        Self {
-            identifier,
-        }
-    }
-}
