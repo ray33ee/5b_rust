@@ -7,7 +7,7 @@ use std::io::Write;
 use std::borrow::Cow;
 
 //A trait that defines functions to convert from IR to T
-pub trait FromIT {
+pub trait FromIR {
 
     /// Used to identify all the possible variants that the IR can represent
     fn variants(ir: & [u8]) -> Option<Vec<Variant>>;
@@ -16,7 +16,7 @@ pub trait FromIT {
     fn encode(ir: & [u8], variant: Variant) -> String;
 }
 
-impl FromIT for crate::common::Base2_16 {
+impl FromIR for crate::common::Base2_16 {
     fn variants(_ir: & [u8]) -> Option<Vec<Variant>> {
         //Any set of bytes can be converted to base 2-16
         Some(vec![Variant("Base 2"), //Variant("Base 3"), Variant("Base 4"), Variant("Base 5"), Variant("Base 6"), Variant("Base 7"),
@@ -40,7 +40,7 @@ impl FromIT for crate::common::Base2_16 {
     }
 }
 
-impl FromIT for crate::common::FixedFloat {
+impl FromIR for crate::common::FixedFloat {
     fn variants(ir: & [u8]) -> Option<Vec<Variant>> {
         let len = ir.as_ref().len();
 
@@ -65,7 +65,7 @@ impl FromIT for crate::common::FixedFloat {
     }
 }
 
-impl FromIT for crate::common::FixedInt {
+impl FromIR for crate::common::FixedInt {
     fn variants(ir: & [u8]) -> Option<Vec<Variant>> {
         let len = ir.as_ref().len();
 
@@ -96,7 +96,7 @@ impl FromIT for crate::common::FixedInt {
     }
 }
 
-impl FromIT for crate::common::DateTime {
+impl FromIR for crate::common::DateTime {
     fn variants(ir: & [u8]) -> Option<Vec<Variant>> {
         let len = ir.as_ref().len();
 
@@ -138,7 +138,7 @@ impl FromIT for crate::common::DateTime {
     }
 }
 
-impl FromIT for crate::common::Unicode8 {
+impl FromIR for crate::common::Unicode8 {
     fn variants(ir: &[u8]) -> Option<Vec<Variant>> {
         if from_utf8(ir).is_ok() {
             Some(vec![Variant("")])
@@ -158,7 +158,7 @@ impl FromIT for crate::common::Unicode8 {
     }
 }
 
-impl FromIT for crate::common::IpV4 {
+impl FromIR for crate::common::IpV4 {
     fn variants(ir: &[u8]) -> Option<Vec<Variant>> {
         let len = ir.as_ref().len();
 
@@ -188,7 +188,7 @@ impl FromIT for crate::common::IpV4 {
     }
 }
 
-impl FromIT for crate::common::IpV6 {
+impl FromIR for crate::common::IpV6 {
     fn variants(ir: &[u8]) -> Option<Vec<Variant>> {
         let len = ir.as_ref().len();
 
@@ -218,7 +218,7 @@ impl FromIT for crate::common::IpV6 {
     }
 }
 
-impl FromIT for crate::common::Base91 {
+impl FromIR for crate::common::Base91 {
     fn variants(_ir: &[u8]) -> Option<Vec<Variant>> {
         Some(vec![Variant("")])
     }
@@ -230,7 +230,7 @@ impl FromIT for crate::common::Base91 {
     }
 }
 
-impl FromIT for crate::common::Base85 {
+impl FromIR for crate::common::Base85 {
     fn variants(_ir: &[u8]) -> Option<Vec<Variant>> {
         Some(vec![Variant("z85"), Variant("ascii85")])
     }
@@ -244,7 +244,7 @@ impl FromIT for crate::common::Base85 {
     }
 }
 
-impl FromIT for crate::common::Base64 {
+impl FromIR for crate::common::Base64 {
     fn variants(_ir: &[u8]) -> Option<Vec<Variant>> {
         Some(vec![Variant("Bcrypt"),
              Variant("BinHex"),
@@ -271,17 +271,17 @@ impl FromIT for crate::common::Base64 {
     }
 }
 
-impl FromIT for crate::common::ByteList {
+impl FromIR for crate::common::ByteList {
     fn variants(_ir: &[u8]) -> Option<Vec<Variant>> {
         Some(vec![Variant("")])
     }
 
     fn encode(ir: &[u8], _variant: Variant) -> String {
-        format!("{:?}", ir)
+        format!("({} byte(s)) {:?}", ir.len(), ir)
     }
 }
 
-impl FromIT for crate::common::Hash {
+impl FromIR for crate::common::Hash {
     fn variants(_ir: &[u8]) -> Option<Vec<Variant>> {
         Some(vec![Variant("md5"), Variant("sha1"), Variant("sha256"), Variant("sha512")])
     }
@@ -307,7 +307,7 @@ impl FromIT for crate::common::Hash {
     }
 }
 
-impl FromIT for crate::common::UUID {
+impl FromIR for crate::common::UUID {
     fn variants(ir: &[u8]) -> Option<Vec<Variant>> {
         if uuid::Uuid::from_slice(ir).is_ok() {
             Some(vec![Variant("")])
@@ -325,21 +325,21 @@ impl FromIT for crate::common::UUID {
     }
 }
 
-impl FromIT for crate::common::EscapedString {
+impl FromIR for crate::common::EscapedString {
     fn variants(_ir: &[u8]) -> Option<Vec<Variant>> {
         Some(vec![Variant("")])
     }
 
     fn encode(ir: &[u8], variant: Variant) -> String {
         if variant.0 == "" {
-            crate::escape::EscapedString::encode(ir)
+            crate::escape::EscapeSequence::encode(ir)
         } else {
             panic!("Invalid variant in FromIR EscapedString");
         }
     }
 }
 
-impl FromIT for crate::common::UrlEncode {
+impl FromIR for crate::common::UrlEncode {
     fn variants(_ir: &[u8]) -> Option<Vec<Variant>> {
         Some(vec![Variant("")])
     }
@@ -353,7 +353,7 @@ impl FromIT for crate::common::UrlEncode {
     }
 }
 
-impl FromIT for crate::common::UrlDecode {
+impl FromIR for crate::common::UrlDecode {
     fn variants(ir: &[u8]) -> Option<Vec<Variant>> {
         if from_utf8(ir).is_ok() {
             Some(vec![Variant("Legacy"), Variant("RFC 3986")])

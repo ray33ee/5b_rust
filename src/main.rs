@@ -5,11 +5,11 @@ mod fromir;
 mod toir;
 mod escape;
 
-use fromir::FromIT;
+use fromir::FromIR;
 use toir::ToIR;
 use crate::common::{Variant, FixedInt, FixedFloat, Base2_16, DateTime, Unicode8, IpV4, IpV6, Base91, Base64, Base85, ByteList, UUID, EscapedString, UrlEncode, UrlDecode};
 
-use colour::{blue, yellow};
+use colour::{blue, yellow, green};
 
 fn read_without_newline() -> String {
     let mut string = String::new();
@@ -43,7 +43,7 @@ fn main() {
         (Base91::identify, "Base91 data", Base91::decode),
         (Unicode8::identify, "Unicode 8 string", Unicode8::decode),
         (ByteList::identify, "Byte list", ByteList::decode),
-        (EscapedString::identify, "Escaped character string", EscapedString::decode),
+        (EscapedString::identify, "Escaped sequence", EscapedString::decode),
     ];
 
     let from_ir: [(fn(& [u8]) -> Option<Vec<Variant>>, & str, fn(& [u8], Variant) -> String); 15] = [
@@ -59,7 +59,7 @@ fn main() {
         (Base91::variants, "Base91 data", Base91::encode),
         (ByteList::variants, "Byte list", ByteList::encode),
         (Unicode8::variants, "Unicode 8 string", Unicode8::encode),
-        (EscapedString::variants, "Escaped character string", EscapedString::encode),
+        (EscapedString::variants, "Escaped sequence", EscapedString::encode),
         (UrlEncode::variants, "Encoded URL", UrlEncode::encode),
         (UrlDecode::variants, "Decoded URL", UrlDecode::encode),
     ];
@@ -114,7 +114,8 @@ fn main() {
                 let optional_variants = (variants_function)(&ir);
 
                 if let Some(variants) = optional_variants {
-                    println!("{}", name);
+                    green!("{}", name);
+                    println!();
 
                     for variant in variants {
                         yellow!("    {}", variant.0);

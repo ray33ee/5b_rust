@@ -22,11 +22,19 @@ impl ToIR for crate::common::Base2_16 {
     //Todo: Since dec, hex, bin and oct are the most likely bases (in that order) we reorder the variant list to show this
     fn identify(value: &str) -> Option<Vec<Variant>> {
 
-        match &value[0..2] {
-            "0b" => return Some(vec![Variant("Base 2")]),
-            "0o" => return Some(vec![Variant("Base 8")]),
-            "0x" => return Some(vec![Variant("Base 16")]),
-            _ => {}
+        let mut chars = value.chars();
+
+        if let Some(character) = chars.next() {
+            if character == '0' {
+                if let Some(character) = chars.next() {
+                    match character {
+                        'b' => return Some(vec![Variant("Base 2")]),
+                        'o' => return Some(vec![Variant("Base 8")]),
+                        'x' => return Some(vec![Variant("Base 16")]),
+                        _ => {}
+                    }
+                }
+            }
         }
 
         let is_valid_base16 = value.as_bytes().iter().fold(true, |acc, &x| {
@@ -72,8 +80,10 @@ impl ToIR for crate::common::Base2_16 {
 
     fn decode(mut value: &str, variant: Variant) -> Vec<u8> {
 
-        if &value[0..2] == "0b" || &value[0..2] == "0o" || &value[0..2] == "0x" {
-            value = &value[2..];
+        if value.len() > 1 {
+            if &value[0..2] == "0b" || &value[0..2] == "0o" || &value[0..2] == "0x" {
+                value = &value[2..];
+            }
         }
 
         let base = Self::get_base(&variant);
@@ -486,18 +496,30 @@ impl ToIR for crate::common::UUID {
 
 impl ToIR for crate::common::EscapedString {
     fn identify(value: &str) -> Option<Vec<Variant>> {
-        if crate::escape::EscapedString::decode(value).is_ok() {
-            Some(vec![Variant("")])
-        } else {
+
+        let mut variants = Vec::new();
+
+        if crate::escape::EscapeSequence::decode(value, crate::escape::Variant::C).is_ok() {
+            variants.push(Variant("C"))
+        }
+
+        if crate::escape::EscapeSequence::decode(value, crate::escape::Variant::Python).is_ok() {
+            variants.push(Variant("Python"))
+        }
+
+        if variants.is_empty() {
             None
+        } else {
+            Some(variants)
         }
     }
 
     fn decode(value: &str, variant: Variant) -> Vec<u8> {
-        if variant.0 == "" {
-            crate::escape::EscapedString::decode(value).unwrap()
-        } else {
-            panic!("Invalid variant in ToIR EscapedString");
+
+        match variant.0 {
+            "C" => crate::escape::EscapeSequence::decode(value, crate::escape::Variant::C).unwrap(),
+            "Python" => crate::escape::EscapeSequence::decode(value, crate::escape::Variant::Python).unwrap(),
+            _ => panic!("Invalid variant in ToIR EscapedString"),
         }
     }
 }

@@ -138,7 +138,7 @@ dependencies = [
 
 [[package]]
 name = "five_b"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "ascii85",
  "base64",
@@ -150,6 +150,7 @@ dependencies = [
  "half",
  "lazy_static",
  "regex",
+ "unicode_names2",
  "urlencoding",
  "uuid",
  "z85",
@@ -409,6 +410,12 @@ dependencies = [
  "wasi",
  "winapi",
 ]
+
+[[package]]
+name = "unicode_names2"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "87d6678d7916394abad0d4b19df4d3802e1fd84abd7d701f39b75ee71b9e8cf1"
 
 [[package]]
 name = "urlencoding"

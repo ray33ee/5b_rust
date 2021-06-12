@@ -46,6 +46,10 @@ impl Base2_16 {
         byte >= '0' as u8 && byte <= '9' as u8 || byte >= 'a' as u8 && byte <= 'f' as u8 || byte >= 'A' as u8 && byte <= 'F' as u8
     }
 
+    pub fn is_oct(byte: u8) -> bool {
+        byte >= '0' as u8 && byte <= '7' as u8
+    }
+
     pub fn get_base(variant: & Variant) -> u64 {
         u64::from_str(&(variant.0)[5..]).unwrap()
     }
