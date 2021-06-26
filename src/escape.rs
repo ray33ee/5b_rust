@@ -150,7 +150,7 @@ impl<'t> Iterator for EscapedStringIterator<'t> {
                         hex_character_count + 2
                     }
                     Variant::Python => {
-                        if hex_character_count != 2 {
+                        if hex_character_count < 2 {
                             self.remaining = &self.remaining[0..0];
                             return Some(Err(()))
                         }
@@ -358,8 +358,8 @@ impl EscapeSequence {
                 string.push_str("\\v");
             } else {
 
-                let upper = crate::common::Base2_16::num_to_ascii(byte >> 4, true) as char;
-                let lower = crate::common::Base2_16::num_to_ascii(byte & 0x0F, true) as char;
+                let upper = crate::common::Base2_16::num_to_ascii(byte >> 4, false) as char;
+                let lower = crate::common::Base2_16::num_to_ascii(byte & 0x0F, false) as char;
 
                 string.push_str("\\x");
                 string.push(upper);

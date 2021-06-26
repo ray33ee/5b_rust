@@ -6,6 +6,11 @@ use std::net::{SocketAddrV4, SocketAddrV6};
 use std::io::Write;
 use std::borrow::Cow;
 
+pub enum Endianness {
+    Default,
+    Dual,
+}
+
 //A trait that defines functions to convert from IR to T
 pub trait FromIR {
 
@@ -14,6 +19,8 @@ pub trait FromIR {
 
     ///Used to convert an IR to a String. NOTE: this function does NOT check to make sure that the IR can be converted, and will panic if the conversion fails
     fn encode(ir: & [u8], variant: Variant) -> String;
+
+    fn endianness() -> Endianness;
 }
 
 impl FromIR for crate::common::Base2_16 {
@@ -38,6 +45,10 @@ impl FromIR for crate::common::Base2_16 {
 
         string
     }
+
+    fn endianness() -> Endianness {
+        Endianness::Default
+    }
 }
 
 impl FromIR for crate::common::FixedFloat {
@@ -45,23 +56,32 @@ impl FromIR for crate::common::FixedFloat {
         let len = ir.as_ref().len();
 
         match len {
-            2 => Some(vec![Variant("16-bit")]),
-            4 => Some(vec![Variant("32-bit")]),
-            8 => Some(vec![Variant("64-bit")]),
+            2 => Some(vec![Variant("16-bit"), Variant("16-bit mantissa/exponent")]),
+            4 => Some(vec![Variant("32-bit"), Variant("32-bit mantissa/exponent")]),
+            8 => Some(vec![Variant("64-bit"), Variant("64-bit mantissa/exponent")]),
             _ => None,
         }
 
     }
 
     fn encode(ir: & [u8], variant: Variant) -> String {
-        let float = match variant.0 {
-            "16-bit" => f16::from_le_bytes(ir.as_ref().try_into().unwrap()).to_f64(),
-            "32-bit" => f32::from_le_bytes(ir.as_ref().try_into().unwrap()) as f64,
-            "64-bit" => f64::from_le_bytes(ir.as_ref().try_into().unwrap()),
-            _ => panic!("Invalid variant in FromIT FixedFloat")
-        };
 
-        float.to_string()
+        if variant.0.len() == 24 {
+            if &variant.0[7..] == "mantissa/exponent" {
+                return Self::to_mes_string(ir);
+            }
+        }
+
+        match &variant.0[0..6] {
+            "16-bit" => f16::from_le_bytes(ir.as_ref().try_into().unwrap()).to_f64().to_string(),
+            "32-bit" => (f32::from_le_bytes(ir.as_ref().try_into().unwrap()) as f64).to_string(),
+            "64-bit" => f64::from_le_bytes(ir.as_ref().try_into().unwrap()).to_string(),
+            _ => panic!("Invalid variant in FromIT FixedFloat")
+        }
+    }
+
+    fn endianness() -> Endianness {
+        Endianness::Dual
     }
 }
 
@@ -93,6 +113,10 @@ impl FromIR for crate::common::FixedInt {
             "i128" => i128::from_le_bytes(ir.as_ref().try_into().unwrap()).to_string(),
             _ => panic!("Invalid variant in FromIT FixedInt")
         }
+    }
+
+    fn endianness() -> Endianness {
+        Endianness::Dual
     }
 }
 
@@ -136,6 +160,10 @@ impl FromIR for crate::common::DateTime {
         }
 
     }
+
+    fn endianness() -> Endianness {
+        Endianness::Dual
+    }
 }
 
 impl FromIR for crate::common::Unicode8 {
@@ -155,6 +183,10 @@ impl FromIR for crate::common::Unicode8 {
         } else {
             panic!("Invalid variant in FromIR Unicode8");
         }
+    }
+
+    fn endianness() -> Endianness {
+        Endianness::Default
     }
 }
 
@@ -186,6 +218,10 @@ impl FromIR for crate::common::IpV4 {
             _ => panic!("Invalid variant in FromIT IpV4"),
         }
     }
+
+    fn endianness() -> Endianness {
+        Endianness::Default
+    }
 }
 
 impl FromIR for crate::common::IpV6 {
@@ -216,6 +252,10 @@ impl FromIR for crate::common::IpV6 {
             _ => panic!("Invalid variant in FromIT IpV4"),
         }
     }
+
+    fn endianness() -> Endianness {
+        Endianness::Default
+    }
 }
 
 impl FromIR for crate::common::Base91 {
@@ -227,6 +267,10 @@ impl FromIR for crate::common::Base91 {
         unsafe {
             String::from_utf8_unchecked(base91::slice_encode(ir))
         }
+    }
+
+    fn endianness() -> Endianness {
+        Endianness::Default
     }
 }
 
@@ -241,6 +285,10 @@ impl FromIR for crate::common::Base85 {
              "ascii85" => ascii85::encode(ir),
             _ => panic!("Invalid variant in FromIR Base85")
         }
+    }
+
+    fn endianness() -> Endianness {
+        Endianness::Default
     }
 }
 
@@ -269,6 +317,10 @@ impl FromIR for crate::common::Base64 {
             _ => panic!("Invalid variant in FromIr Base64"),
         }
     }
+
+    fn endianness() -> Endianness {
+        Endianness::Default
+    }
 }
 
 impl FromIR for crate::common::ByteList {
@@ -278,6 +330,10 @@ impl FromIR for crate::common::ByteList {
 
     fn encode(ir: &[u8], _variant: Variant) -> String {
         format!("({} byte(s)) {:?}", ir.len(), ir)
+    }
+
+    fn endianness() -> Endianness {
+        Endianness::Default
     }
 }
 
@@ -305,6 +361,10 @@ impl FromIR for crate::common::Hash {
 
         crate::common::Base2_16::encode(&hash, Variant("Base 16"))
     }
+
+    fn endianness() -> Endianness {
+        Endianness::Default
+    }
 }
 
 impl FromIR for crate::common::UUID {
@@ -323,6 +383,10 @@ impl FromIR for crate::common::UUID {
             panic!("Invalid variant in FromIT uuid")
         }
     }
+
+    fn endianness() -> Endianness {
+        Endianness::Default
+    }
 }
 
 impl FromIR for crate::common::EscapedString {
@@ -337,6 +401,10 @@ impl FromIR for crate::common::EscapedString {
             panic!("Invalid variant in FromIR EscapedString");
         }
     }
+
+    fn endianness() -> Endianness {
+        Endianness::Default
+    }
 }
 
 impl FromIR for crate::common::UrlEncode {
@@ -350,6 +418,10 @@ impl FromIR for crate::common::UrlEncode {
         } else {
             panic!("Invalid variant in FromIR UrlEncode");
         }
+    }
+
+    fn endianness() -> Endianness {
+        Endianness::Default
     }
 }
 
@@ -376,6 +448,10 @@ impl FromIR for crate::common::UrlDecode {
         } else {
             panic!("Invalid variant in FromIR UrlDecode");
         }
+    }
+
+    fn endianness() -> Endianness {
+        Endianness::Default
     }
 }
 

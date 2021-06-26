@@ -9,7 +9,9 @@ use fromir::FromIR;
 use toir::ToIR;
 use crate::common::{Variant, FixedInt, FixedFloat, Base2_16, DateTime, Unicode8, IpV4, IpV6, Base91, Base64, Base85, ByteList, UUID, EscapedString, UrlEncode, UrlDecode};
 
-use colour::{blue, yellow, green};
+use colour::{blue, yellow, green, magenta};
+use crate::fromir::Endianness;
+use std::io::SeekFrom::End;
 
 fn read_without_newline() -> String {
     let mut string = String::new();
@@ -46,22 +48,22 @@ fn main() {
         (EscapedString::identify, "Escaped sequence", EscapedString::decode),
     ];
 
-    let from_ir: [(fn(& [u8]) -> Option<Vec<Variant>>, & str, fn(& [u8], Variant) -> String); 15] = [
-        (IpV4::variants, "Ipv4 address", IpV4::encode),
-        (IpV6::variants, "Ipv6 address", IpV6::encode),
-        (DateTime::variants, "Unix time", DateTime::encode),
-        (FixedFloat::variants, "Floats", FixedFloat::encode),
-        (UUID::variants, "UUID", UUID::encode),
-        (FixedInt::variants, "Primitive integers", FixedInt::encode),
-        (Base2_16::variants, "Base 2-16 numbers", Base2_16::encode),
-        (Base64::variants, "Base64 data", Base64::encode),
-        (Base85::variants, "Base85 data", Base85::encode),
-        (Base91::variants, "Base91 data", Base91::encode),
-        (ByteList::variants, "Byte list", ByteList::encode),
-        (Unicode8::variants, "Unicode 8 string", Unicode8::encode),
-        (EscapedString::variants, "Escaped sequence", EscapedString::encode),
-        (UrlEncode::variants, "Encoded URL", UrlEncode::encode),
-        (UrlDecode::variants, "Decoded URL", UrlDecode::encode),
+    let from_ir: [(fn(& [u8]) -> Option<Vec<Variant>>, & str, fn(& [u8], Variant) -> String, fn() -> Endianness); 15] = [
+        (IpV4::variants, "Ipv4 address", IpV4::encode, IpV4::endianness),
+        (IpV6::variants, "Ipv6 address", IpV6::encode, IpV6::endianness),
+        (DateTime::variants, "Unix time", DateTime::encode, DateTime::endianness),
+        (FixedFloat::variants, "Floats", FixedFloat::encode, FixedFloat::endianness),
+        (UUID::variants, "UUID", UUID::encode, UUID::endianness),
+        (FixedInt::variants, "Primitive integers", FixedInt::encode, FixedInt::endianness),
+        (Base2_16::variants, "Base 2-16 numbers", Base2_16::encode, Base2_16::endianness),
+        (Base64::variants, "Base64 data", Base64::encode, Base64::endianness),
+        (Base85::variants, "Base85 data", Base85::encode, Base85::endianness),
+        (Base91::variants, "Base91 data", Base91::encode, Base91::endianness),
+        (ByteList::variants, "Byte list", ByteList::encode, ByteList::endianness),
+        (Unicode8::variants, "Unicode 8 string", Unicode8::encode, Unicode8::endianness),
+        (EscapedString::variants, "Escaped sequence", EscapedString::encode, EscapedString::endianness),
+        (UrlEncode::variants, "Encoded URL", UrlEncode::encode, UrlEncode::endianness),
+        (UrlDecode::variants, "Decoded URL", UrlDecode::encode, UrlDecode::endianness),
     ];
 
 
@@ -106,11 +108,16 @@ fn main() {
 
             let ir = (decoder)(&input, variant);
 
+            let reverse: Vec<_> = ir.iter().rev().map(|x| *x).collect();
+
             println!("**************");
             println!("Other formats:");
             println!("**************");
 
-            for (variants_function, name, encoder) in from_ir {
+            for (variants_function, name, encoder, endianness) in from_ir {
+
+                let endianness = endianness();
+
                 let optional_variants = (variants_function)(&ir);
 
                 if let Some(variants) = optional_variants {
@@ -118,8 +125,19 @@ fn main() {
                     println!();
 
                     for variant in variants {
+
                         yellow!("    {}", variant.0);
-                        println!("    {}", (encoder)(&ir, variant.clone()))
+
+                        match endianness {
+                            Endianness::Default => {
+                                println!("    {}", (encoder)(&ir, variant.clone()));
+                            },
+                            Endianness::Dual => {
+                                print!("    {}", (encoder)(&ir, variant.clone()));
+                                magenta!(" ({})", (encoder)(&reverse, variant.clone()));
+                                println!();
+                            }
+                        }
                     }
                 }
             }

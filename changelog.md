@@ -5,7 +5,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 ### To Do
-
 - ToIR implementations:
   - Html colours (8, 16, 24 and 32-bit)
   - File path (load bytes from file, implement as a command line option)  
@@ -14,21 +13,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   - Disassembly (16, 32 and 64-bit)
   - File path (save bytes from file, implement as a command line option, with optional prompt to confirm the save)
 - Add command line options for
-  - Endianness
-      - Add global functionality to edit endianness. Also allow types to specify their own custom endianness
-      - Types:    
-        - Default (some types use big endian, some use little)
-          - Allowing a default is really important, since some types show their LSB on the left (escape sequences, byte lists, etc.) and some show their LSB on the right (numbers, IP addresses, etc.)
-        - Opposite (opposite of default)
-        - Little (always little endian)
-        - Big (always big)
   - Hex case formatting
   - ascii table
 - Ignore whitespace with certain types (numbers)
-- Provide a variant for FromIr Floats showing mantissa, exponent and signs
 
 ### Unfinished Ideas
-None
+- None
+
+## [0.1.3] - 2021-06-12
+### Added
+- Mantissa/Exponent form for `FixedFloat` added
+- Endianness
+  - `ToIr`: Always store data as little endian
+  - `FromIr`: Two options, display the default endianness (chosen by `FromIr::encode`) or both little and big if no default can be chosen (primitive integers and float for example)
+
+### Fixed
+- Escape sequence code now accepts \fff as a valid python sequence as well as a C sequence
 
 ## [0.1.2] - 2021-06-05
 ### Added
