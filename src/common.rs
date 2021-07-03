@@ -1,10 +1,9 @@
 use std::str::FromStr;
 use std::convert::TryInto;
 
-///Convertable types
+//Convertable types
 pub struct Base2_16; //All numbers between base 2 and 16, each base implemented as a variant
 pub struct FixedFloat; //16, 32, 64-bit floats
-//pub struct ArbitraryFloat; //Arbitrary precision floats
 pub struct DateTime; //32 and 64-bit unix time
 pub struct FixedInt; //8-128 bit signed/unsigned integer
 pub struct Unicode8;
@@ -19,6 +18,42 @@ pub struct Hash;
 pub struct EscapedString;
 pub struct UrlEncode;
 pub struct UrlDecode;
+pub struct UnicodeNames;
+pub struct Colour;
+
+impl Colour {
+    pub fn _8_to_24(colour: u8) -> ansi_term::Colour {
+        let blue = colour & 0x03;
+        let green = (colour & 0x1C) >> 2;
+        let red = (colour & 0xE0) >> 5;
+
+        let red = Colour::scale(red, 8);
+        let green = Colour::scale(green, 8);
+        let blue = Colour::scale(blue, 4);
+
+        ansi_term::Colour::RGB(red, green, blue)
+    }
+    pub fn _16_to_24(colour: u16) -> ansi_term::Colour {
+        let blue = colour & 0x1f;
+        let green = (colour & 0x7e0) >> 5;
+        let red = (colour & 0xf800) >> 11;
+
+        let red = Colour::scale(red as u8, 32);
+        let green = Colour::scale(green as u8, 64);
+        let blue = Colour::scale(blue as u8, 32);
+
+        ansi_term::Colour::RGB(red, green, blue)
+    }
+
+    ///Scale up n bits of information to 8 bits
+    fn scale(value: u8, total: u8) -> u8 {
+        let step = 255.0  / (total as f32 - 1.0);
+
+        (step * value as f32).round() as u8
+    }
+}
+
+//
 
 impl FixedFloat {
     fn mantissa_exponent_to_string(repr: (i8, u64, i16)) -> String {

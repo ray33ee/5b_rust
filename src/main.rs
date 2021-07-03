@@ -7,11 +7,15 @@ mod escape;
 
 use fromir::FromIR;
 use toir::ToIR;
-use crate::common::{Variant, FixedInt, FixedFloat, Base2_16, DateTime, Unicode8, IpV4, IpV6, Base91, Base64, Base85, ByteList, UUID, EscapedString, UrlEncode, UrlDecode};
+use crate::common::{Variant, FixedInt, FixedFloat, Base2_16, DateTime, Unicode8, IpV4, IpV6, Base91, Base64, Base85, ByteList, UUID, EscapedString, UrlEncode, UrlDecode, UnicodeNames};
 
 use colour::{blue, yellow, green, magenta};
 use crate::fromir::Endianness;
 use std::io::SeekFrom::End;
+
+use ansi_term::{Style, Colour, ANSIGenericString};
+use std::str::{from_utf8_unchecked, from_utf8};
+
 
 fn read_without_newline() -> String {
     let mut string = String::new();
@@ -32,7 +36,7 @@ fn read_without_newline() -> String {
 
 fn main() {
 
-    let to_ir: [(fn(& str) -> Option<Vec<Variant>>, & str, fn(& str, Variant) -> Vec<u8>); 13] = [
+    let to_ir: Vec<(fn(& str) -> Option<Vec<Variant>>, & str, fn(& str, Variant) -> Vec<u8>)> = vec![
         (IpV4::identify, "Ipv4 address", IpV4::decode),
         (IpV6::identify, "Ipv6 address", IpV6::decode),
         (DateTime::identify, "Unix time", DateTime::decode),
@@ -46,9 +50,11 @@ fn main() {
         (Unicode8::identify, "Unicode 8 string", Unicode8::decode),
         (ByteList::identify, "Byte list", ByteList::decode),
         (EscapedString::identify, "Escaped sequence", EscapedString::decode),
+        (UnicodeNames::identify, "Unicode character names", UnicodeNames::decode),
+        (common::Colour::identify, "HTML colour", common::Colour::decode),
     ];
 
-    let from_ir: [(fn(& [u8]) -> Option<Vec<Variant>>, & str, fn(& [u8], Variant) -> String, fn() -> Endianness); 15] = [
+    let from_ir: Vec<(fn(& [u8]) -> Option<Vec<Variant>>, & str, fn(& [u8], Variant) -> ANSIGenericString<str>, fn() -> Endianness)> = vec![
         (IpV4::variants, "Ipv4 address", IpV4::encode, IpV4::endianness),
         (IpV6::variants, "Ipv6 address", IpV6::encode, IpV6::endianness),
         (DateTime::variants, "Unix time", DateTime::encode, DateTime::endianness),
@@ -64,6 +70,7 @@ fn main() {
         (EscapedString::variants, "Escaped sequence", EscapedString::encode, EscapedString::endianness),
         (UrlEncode::variants, "Encoded URL", UrlEncode::encode, UrlEncode::endianness),
         (UrlDecode::variants, "Decoded URL", UrlDecode::encode, UrlDecode::endianness),
+        (common::Colour::variants, "Colour", common::Colour::encode, common::Colour::endianness),
     ];
 
 
@@ -133,8 +140,10 @@ fn main() {
                                 println!("    {}", (encoder)(&ir, variant.clone()));
                             },
                             Endianness::Dual => {
-                                print!("    {}", (encoder)(&ir, variant.clone()));
-                                magenta!(" ({})", (encoder)(&reverse, variant.clone()));
+                                print!("    {} ", (encoder)(&ir, variant.clone()));
+                                magenta!("(");
+                                print!("{}", (encoder)(&reverse, variant.clone()));
+                                magenta!(")");
                                 println!();
                             }
                         }

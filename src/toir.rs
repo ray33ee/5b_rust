@@ -524,6 +524,52 @@ impl ToIR for crate::common::EscapedString {
     }
 }
 
+impl ToIR for crate::common::UnicodeNames {
+    fn identify(value: &str) -> Option<Vec<Variant>> {
+        if unicode_names2::character(value).is_some() {
+            Some(vec![Variant("")])
+        } else {
+            None
+        }
+    }
+
+    fn decode(value: &str, variant: Variant) -> Vec<u8> {
+        if variant.0 == "" {
+            let mut bytes = Vec::new();
+
+            let character = unicode_names2::character(value).unwrap();
+
+            bytes.extend_from_slice(character.to_string().as_bytes());
+
+            bytes
+        } else {
+            panic!("Invalid variant in ToIR UUID");
+        }
+    }
+}
+
+impl ToIR for crate::common::Colour {
+    fn identify(value: &str) -> Option<Vec<Variant>> {
+        if value.len() == 7 {
+            if &value[0..1] == "#" {
+                if crate::common::Base2_16::identify(&value[1..]).is_some() {
+                    return Some(vec![Variant("")]);
+                }
+            }
+        }
+
+        None
+    }
+
+    fn decode(value: &str, variant: Variant) -> Vec<u8> {
+        if variant.0 == "" {
+            crate::common::Base2_16::decode(&value[1..], Variant("Base 16"))
+        } else {
+            panic!("Invalid variant in ToIR Colour");
+        }
+    }
+}
+
 /*
 
 impl ToIR for crate::common:: {
