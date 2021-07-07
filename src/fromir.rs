@@ -3,16 +3,10 @@ use half::f16;
 use std::convert::TryInto;
 use std::str::{from_utf8, from_utf8_unchecked};
 use std::net::{SocketAddrV4, SocketAddrV6};
-use std::io::Write;
 use std::borrow::Cow;
+use crate::endian::{Endianness};
 
-use ansi_term::{ANSIGenericString, Style};
-use std::env::var;
-
-pub enum Endianness {
-    Default,
-    Dual,
-}
+use ansi_term::{ANSIGenericString, Style, Color};
 
 //A trait that defines functions to convert from IR to T
 pub trait FromIR {
@@ -22,8 +16,6 @@ pub trait FromIR {
 
     ///Used to convert an IR to a String. NOTE: this function does NOT check to make sure that the IR can be converted, and will panic if the conversion fails
     fn encode(ir: & [u8], variant: Variant) -> ANSIGenericString<str>;
-
-    fn endianness() -> Endianness;
 }
 
 impl FromIR for crate::common::Base2_16 {
@@ -48,43 +40,63 @@ impl FromIR for crate::common::Base2_16 {
 
         Style::default().paint(string)
     }
-
-    fn endianness() -> Endianness {
-        Endianness::Default
-    }
 }
 
 impl FromIR for crate::common::FixedFloat {
     fn variants(ir: & [u8]) -> Option<Vec<Variant>> {
         let len = ir.as_ref().len();
 
-        match len {
-            2 => Some(vec![Variant("16-bit"), Variant("16-bit mantissa/exponent")]),
-            4 => Some(vec![Variant("32-bit"), Variant("32-bit mantissa/exponent")]),
-            8 => Some(vec![Variant("64-bit"), Variant("64-bit mantissa/exponent")]),
-            _ => None,
+        let (mut variants, float) = match len {
+            2 => (vec![Variant("16-bit"), Variant("16-bit mantissa/exponent")], f16::from_le_bytes(ir.as_ref().try_into().unwrap()).to_f64()),
+            4 => (vec![Variant("32-bit"), Variant("32-bit mantissa/exponent")], f32::from_le_bytes(ir.as_ref().try_into().unwrap()) as f64),
+            8 => (vec![Variant("64-bit"), Variant("64-bit mantissa/exponent")], f64::from_le_bytes(ir.as_ref().try_into().unwrap())),
+            _ => return None,
+        };
+
+        if !float.is_infinite() && !float.is_nan() {
+            match len {
+                2 => variants.push(Variant("16-bit scientific notation")),
+                4 => variants.push(Variant("32-bit scientific notation")),
+                8 => variants.push(Variant("64-bit scientific notation")),
+                _ => {}
+            }
+
+
+            if float.log10().abs() < 27.0 {
+                match len {
+                    2 => variants.push(Variant("16-bit SI notation")),
+                    4 => variants.push(Variant("32-bit SI notation")),
+                    8 => variants.push(Variant("64-bit SI notation")),
+                    _ => {}
+                }
+            }
         }
+
+        Some(variants)
 
     }
 
     fn encode(ir: & [u8], variant: Variant) -> ANSIGenericString<str> {
 
-        if variant.0.len() == 24 {
-            if &variant.0[7..] == "mantissa/exponent" {
-                return Style::default().paint(Self::to_mes_string(ir));
-            }
-        }
 
-        Style::default().paint(match &variant.0[0..6] {
-            "16-bit" => f16::from_le_bytes(ir.as_ref().try_into().unwrap()).to_f64().to_string(),
-            "32-bit" => (f32::from_le_bytes(ir.as_ref().try_into().unwrap()) as f64).to_string(),
-            "64-bit" => f64::from_le_bytes(ir.as_ref().try_into().unwrap()).to_string(),
+        let format = match &variant.0[6..] {
+            "" => "f",
+            " mantissa/exponent" => return Style::default().paint(Self::bytes_to_mes_string(ir)),
+            " scientific notation" => "e",
+            " SI notation" => "s",
             _ => panic!("Invalid variant in FromIT FixedFloat")
-        })
-    }
+        };
 
-    fn endianness() -> Endianness {
-        Endianness::Dual
+        let num = format_num::NumberFormat::new();
+
+        let number = match &variant.0[0..6] {
+            "16-bit" => f16::from_le_bytes(ir.as_ref().try_into().unwrap()).to_f64(),
+            "32-bit" => f32::from_le_bytes(ir.as_ref().try_into().unwrap()) as f64,
+            "64-bit" => f64::from_le_bytes(ir.as_ref().try_into().unwrap()),
+            _ => panic!("Invalid variant in FromIT FixedFloat")
+        };
+
+        Style::default().paint(num.format(format, number))
     }
 }
 
@@ -117,10 +129,6 @@ impl FromIR for crate::common::FixedInt {
             _ => panic!("Invalid variant in FromIT FixedInt")
         })
     }
-
-    fn endianness() -> Endianness {
-        Endianness::Dual
-    }
 }
 
 impl FromIR for crate::common::DateTime {
@@ -133,9 +141,10 @@ impl FromIR for crate::common::DateTime {
 
                 //Not all combinations of 64-bits result in a valid date, so we
 
-                let timestamp = i64::from_le_bytes(ir.as_ref().try_into().unwrap());
+                let le_timestamp = i64::from_le_bytes(ir.as_ref().try_into().unwrap());
+                let be_timestamp = i64::from_be_bytes(ir.as_ref().try_into().unwrap());
 
-                if chrono::NaiveDateTime::from_timestamp_opt(timestamp, 0).is_some() {
+                if chrono::NaiveDateTime::from_timestamp_opt(le_timestamp, 0).is_some() || chrono::NaiveDateTime::from_timestamp_opt(be_timestamp, 0).is_some() {
                     Some(vec![Variant("64-bit rfc2822"), Variant("64-bit rfc3339")])
                 } else {
                     None
@@ -153,19 +162,21 @@ impl FromIR for crate::common::DateTime {
             _ => panic!("Invalid variant (width) in FromIT DateTime"),
         };
 
-        let datetime = chrono::DateTime::<chrono::Utc>::from_utc(chrono::NaiveDateTime::from_timestamp(timestamp, 0), chrono::Utc);
+        if let Some(datetime) = chrono::NaiveDateTime::from_timestamp_opt(timestamp, 0) {
+            let datetime = chrono::DateTime::<chrono::Utc>::from_utc(datetime, chrono::Utc);
 
-        Style::default().paint(match &(variant.0)[7..14] {
-            "rfc2822" => datetime.to_rfc2822(),
-            "rfc3339" => datetime.to_rfc3339(),
-            "custom " => datetime.format(&(variant.0)[14..]).to_string(),
-            _ => panic!("Invalid variant (format) in FromIT DateTime")
-        })
+            Style::default().paint(match &(variant.0)[7..14] {
+                "rfc2822" => datetime.to_rfc2822(),
+                "rfc3339" => datetime.to_rfc3339(),
+                "custom " => datetime.format(&(variant.0)[14..]).to_string(),
+                _ => panic!("Invalid variant (format) in FromIT DateTime")
+            })
+        } else {
+            Style::default().fg(Color::Red).paint("invalid or out-of-range datetime")
+        }
 
-    }
 
-    fn endianness() -> Endianness {
-        Endianness::Dual
+
     }
 }
 
@@ -211,10 +222,6 @@ impl FromIR for crate::common::Unicode8 {
             panic!("Invalid variant in FromIR Unicode8");
         }
     }
-
-    fn endianness() -> Endianness {
-        Endianness::Default
-    }
 }
 
 impl FromIR for crate::common::IpV4 {
@@ -244,10 +251,6 @@ impl FromIR for crate::common::IpV4 {
             }
             _ => panic!("Invalid variant in FromIT IpV4"),
         })
-    }
-
-    fn endianness() -> Endianness {
-        Endianness::Default
     }
 }
 
@@ -279,10 +282,6 @@ impl FromIR for crate::common::IpV6 {
             _ => panic!("Invalid variant in FromIT IpV4"),
         })
     }
-
-    fn endianness() -> Endianness {
-        Endianness::Default
-    }
 }
 
 impl FromIR for crate::common::Base91 {
@@ -294,10 +293,6 @@ impl FromIR for crate::common::Base91 {
         unsafe {
             Style::default().paint(String::from_utf8_unchecked(base91::slice_encode(ir)))
         }
-    }
-
-    fn endianness() -> Endianness {
-        Endianness::Default
     }
 }
 
@@ -312,10 +307,6 @@ impl FromIR for crate::common::Base85 {
              "ascii85" => ascii85::encode(ir),
             _ => panic!("Invalid variant in FromIR Base85")
         })
-    }
-
-    fn endianness() -> Endianness {
-        Endianness::Default
     }
 }
 
@@ -344,10 +335,6 @@ impl FromIR for crate::common::Base64 {
             _ => panic!("Invalid variant in FromIr Base64"),
         })
     }
-
-    fn endianness() -> Endianness {
-        Endianness::Default
-    }
 }
 
 impl FromIR for crate::common::ByteList {
@@ -357,10 +344,6 @@ impl FromIR for crate::common::ByteList {
 
     fn encode(ir: &[u8], _variant: Variant) -> ANSIGenericString<str> {
         Style::default().paint(format!("({} byte(s)) {:?}", ir.len(), ir))
-    }
-
-    fn endianness() -> Endianness {
-        Endianness::Default
     }
 }
 
@@ -380,10 +363,6 @@ impl FromIR for crate::common::UUID {
             panic!("Invalid variant in FromIT uuid")
         }
     }
-
-    fn endianness() -> Endianness {
-        Endianness::Default
-    }
 }
 
 impl FromIR for crate::common::EscapedString {
@@ -398,10 +377,6 @@ impl FromIR for crate::common::EscapedString {
             panic!("Invalid variant in FromIR EscapedString");
         }
     }
-
-    fn endianness() -> Endianness {
-        Endianness::Default
-    }
 }
 
 impl FromIR for crate::common::UrlEncode {
@@ -415,10 +390,6 @@ impl FromIR for crate::common::UrlEncode {
         } else {
             panic!("Invalid variant in FromIR UrlEncode");
         }
-    }
-
-    fn endianness() -> Endianness {
-        Endianness::Default
     }
 }
 
@@ -446,10 +417,6 @@ impl FromIR for crate::common::UrlDecode {
             panic!("Invalid variant in FromIR UrlDecode");
         }
     }
-
-    fn endianness() -> Endianness {
-        Endianness::Default
-    }
 }
 
 impl FromIR for crate::common::Colour {
@@ -466,7 +433,6 @@ impl FromIR for crate::common::Colour {
     }
 
     fn encode(ir: &[u8], variant: Variant) -> ANSIGenericString<str> {
-        use ansi_term::Color;
 
         let colour = match variant.0 {
             "8-bit color" => {
@@ -516,10 +482,6 @@ impl FromIR for crate::common::Colour {
         }
 
 
-    }
-
-    fn endianness() -> Endianness {
-        Endianness::Dual
     }
 }
 

@@ -1,5 +1,7 @@
 use std::str::FromStr;
 use std::convert::TryInto;
+use crate::endian::Endianness;
+use crate::toir::ToIR;
 
 //Convertable types
 pub struct Base2_16; //All numbers between base 2 and 16, each base implemented as a variant
@@ -14,14 +16,38 @@ pub struct Base85;
 pub struct Base91;
 pub struct ByteList;
 pub struct UUID;
-pub struct Hash;
 pub struct EscapedString;
 pub struct UrlEncode;
 pub struct UrlDecode;
 pub struct UnicodeNames;
 pub struct Colour;
 
+impl FixedInt {
+    pub fn get_base2_16_variant(value: &str) -> Option<Variant> {
+        if let Some(variants) = Base2_16::identify(value) {
+
+            if variants.len() == 1 {
+                Some(variants.get(0).unwrap().clone())
+            } else {
+                let b10 = Variant("Base 10");
+
+                if variants.contains(&b10) {
+                    Some(b10)
+                } else {
+                    Some(variants.last().unwrap().clone())
+                }
+            }
+
+        } else {
+            None
+        }
+    }
+}
+
+
+
 impl Colour {
+    ///Convert the 8-bit colour into 24-bit RGB
     pub fn _8_to_24(colour: u8) -> ansi_term::Colour {
         let blue = colour & 0x03;
         let green = (colour & 0x1C) >> 2;
@@ -33,6 +59,8 @@ impl Colour {
 
         ansi_term::Colour::RGB(red, green, blue)
     }
+
+    ///Convert the 16-bit colour into 24-bit RGB
     pub fn _16_to_24(colour: u16) -> ansi_term::Colour {
         let blue = colour & 0x1f;
         let green = (colour & 0x7e0) >> 5;
@@ -85,7 +113,7 @@ impl FixedFloat {
         (sign, mantissa, exponent as i16)
     }
 
-    pub fn to_mes_string(bytes: &[u8]) -> String {
+    pub fn bytes_to_mes_string(bytes: &[u8]) -> String {
         Self::mantissa_exponent_to_string(Self::get_repr(bytes))
     }
 }
@@ -126,5 +154,5 @@ impl Base2_16 {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Variant(pub & 'static str);

@@ -13,10 +13,39 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Add command line options for
   - Hex case formatting
   - ascii table
+  - Forcing little/big endianness (instead of prompting user) when converting to bytes
 - Ignore whitespace with certain types (numbers)
+- Include some example usage in readme (escaping backslashes for regexes, identifying invalid unicode characters, basic conversions and some esoteric conversions)
+- Pipe input to and from 5b
+- Get away from `colour` and use the `ansi_term` crate instead
+- Add precompiled binary to sourceforge and add link to readme
+- Upgrade readme (build instructions, links to precompiled binaries, example usage, explination of  benefits of 5b)
+
+- Big three to focus on:
+  - Change colouring to `ansi_term`
+  - Sort out colouring, formatting and presentation
+  - Include command options
+  - Improve readme
 
 ### Unfinished Ideas
-- None
+- Not sure about disassembly. But if we want to use it, [this](https://crates.io/crates/iced-x86) seems to be the solution 
+
+## [0.1.5] - 2021-07-03
+### Added
+- When the selected type is `Dual` endianness, we ask the user which (little or big) endianness they would like to interpret the data as
+- `FixedInt` now converts via `Base2_16` so we accept base 2, 8, 10 and 16 for the primitive integers 
+  - This only works when numbers are prefixed (0x, 0o and 0b) otherwise it is treated as decimal.
+  - This means that non-prefixed binary numbers will assumed to be decimal by `FixedInt` and non-prefixed octal or hex numbers will be ignored by `FixedInt`
+  - They will still be picked up by `Base2_16` though
+- `FixedFloat` now displays floats using scientific notation and SI unit notation
+- `Endian` trait representing `Endianness` for types 
+
+### Fixed
+- We now check for invalid dates (out of range usually) and returns an error string instead of the formatted date
+- No longer panics when an empty string is read via `read_without_newline`
+
+### Removed
+- `Hash` object removed as this is a bytes to bytes object (at the moment we only deal with string to bytes or bytes to string objects)
 
 ## [0.1.4] - 2021-06-26
 ### Added

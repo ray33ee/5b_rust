@@ -1,5 +1,5 @@
 
-use crate::common::{Variant};
+use crate::common::{Variant, Base2_16, FixedInt};
 use std::str::FromStr;
 use half::f16;
 use lazy_static::lazy_static;
@@ -18,8 +18,6 @@ pub trait ToIR {
 ///Numbers from base 2 to base 16 using 0-9 and a-f
 impl ToIR for crate::common::Base2_16 {
 
-    //Todo: If the string is prefixed with 0x, 0o or ob, treat them as hex, octal and binary, respectively. And if it doesn't correctly convert to the specified type, return Err(())
-    //Todo: Since dec, hex, bin and oct are the most likely bases (in that order) we reorder the variant list to show this
     fn identify(value: &str) -> Option<Vec<Variant>> {
 
         let mut chars = value.chars();
@@ -167,43 +165,65 @@ impl ToIR for crate::common::FixedInt {
 
         let mut variants = vec![];
 
-        if i128::from_str(value).is_ok() {
+        /*let base2_16_size = if let Some(base2_16_variants) = Base2_16::identify(value) {
+
+            println!("base variants: {:?}", base2_16_variants);
+
+            if variants.len() == 1 {
+                Some(Base2_16::decode(value, base2_16_variants.get(0).unwrap().clone()).len())
+            } else {
+                if variants.contains(&Variant("Base 10")) {
+                    Some()
+                }
+                Some(Base2_16::decode(value, base2_16_variants.get(0).unwrap().clone()).len())
+            }
+
+        } else {
+            None
+        };*/
+
+        let base2_16_size = FixedInt::get_base2_16_variant(value)
+            .map(|x| Base2_16::decode(value, x).len());
+
+        println!("Size: {:?} {}", base2_16_size, value);
+
+        if /*i128::from_str(value).is_ok() ||*/ base2_16_size <= Some(16) {
             variants.insert(0, Variant("i128"));
         }
 
-        if u128::from_str(value).is_ok() {
+        if /*u128::from_str(value).is_ok() ||*/ base2_16_size <= Some(16) {
             variants.insert(0, Variant("u128"));
         }
 
-        if i64::from_str(value).is_ok() {
+        if /*i64::from_str(value).is_ok() ||*/ base2_16_size <= Some(8) {
             variants.insert(0, Variant("i64"));
         }
 
-        if u64::from_str(value).is_ok() {
+        if /*u64::from_str(value).is_ok() ||*/ base2_16_size <= Some(8) {
             variants.insert(0, Variant("u64"));
         }
 
-        if i32::from_str(value).is_ok() {
+        if /*i32::from_str(value).is_ok() ||*/ base2_16_size <= Some(4) {
             variants.insert(0, Variant("i32"));
         }
 
-        if u32::from_str(value).is_ok() {
+        if /*u32::from_str(value).is_ok() ||*/ base2_16_size <= Some(4) {
             variants.insert(0, Variant("u32"));
         }
 
-        if i16::from_str(value).is_ok() {
+        if /*i16::from_str(value).is_ok() ||*/ base2_16_size <= Some(2) {
             variants.insert(0, Variant("i16"));
         }
 
-        if u16::from_str(value).is_ok() {
+        if /*u16::from_str(value).is_ok() ||*/ base2_16_size <= Some(2) {
             variants.insert(0, Variant("u16"));
         }
 
-        if i8::from_str(value).is_ok() {
+        if /*i8::from_str(value).is_ok() ||*/ base2_16_size <= Some(1) {
             variants.insert(0, Variant("i8"));
         }
 
-        if u8::from_str(value).is_ok() {
+        if /*u8::from_str(value).is_ok() ||*/ base2_16_size <= Some(1) {
             variants.insert(0, Variant("u8"));
         }
 
@@ -216,19 +236,52 @@ impl ToIR for crate::common::FixedInt {
     }
 
     fn decode(value: &str, variant: Variant) -> Vec<u8> {
-        match variant.0 {
-            "i8" => vec![i8::from_str(value).unwrap() as u8],
-            "i16" => Vec::from(i16::from_str(value).unwrap().to_le_bytes()),
-            "i32" => Vec::from(i32::from_str(value).unwrap().to_le_bytes()),
-            "i64" => Vec::from(i64::from_str(value).unwrap().to_le_bytes()),
-            "i128" => Vec::from(i128::from_str(value).unwrap().to_le_bytes()),
-            "u8" => vec![u8::from_str(value).unwrap()],
-            "u16" => Vec::from(u16::from_str(value).unwrap().to_le_bytes()),
-            "u32" => Vec::from(u32::from_str(value).unwrap().to_le_bytes()),
-            "u64" => Vec::from(u64::from_str(value).unwrap().to_le_bytes()),
-            "u128" => Vec::from(u128::from_str(value).unwrap().to_le_bytes()),
+
+        let base2_16_variant = FixedInt::get_base2_16_variant(value);
+
+        let (mut bytes, size_required) = match variant.0 {
+            "i8" => (i8::from_str(value)
+                         .map(|x| vec![x as u8])
+                         .unwrap_or_else(|_| Base2_16::decode(value, base2_16_variant.unwrap())), 1),
+            "i16" => (i16::from_str(value)
+                          .map(|x| Vec::from(x.to_le_bytes()))
+                          .unwrap_or_else(|_| Base2_16::decode(value, base2_16_variant.unwrap())), 2),
+            "i32" => (i32::from_str(value)
+                          .map(|x| Vec::from(x.to_le_bytes()))
+                          .unwrap_or_else(|_| Base2_16::decode(value, base2_16_variant.unwrap())), 4),
+            "i64" => (i64::from_str(value)
+                          .map(|x| Vec::from(x.to_le_bytes()))
+                          .unwrap_or_else(|_| Base2_16::decode(value, base2_16_variant.unwrap())), 8),
+            "i128" => (i128::from_str(value)
+                           .map(|x| Vec::from(x.to_le_bytes()))
+                           .unwrap_or_else(|_| Base2_16::decode(value, base2_16_variant.unwrap())), 16),
+
+            "u8" => (u8::from_str(value)
+                         .map(|x| vec![x])
+                         .unwrap_or_else(|_| Base2_16::decode(value, base2_16_variant.unwrap())), 1),
+            "u16" => (u16::from_str(value)
+                          .map(|x| Vec::from(x.to_le_bytes()))
+                          .unwrap_or_else(|_| Base2_16::decode(value, base2_16_variant.unwrap())), 2),
+            "u32" => (u32::from_str(value)
+                          .map(|x| Vec::from(x.to_le_bytes()))
+                          .unwrap_or_else(|_| Base2_16::decode(value, base2_16_variant.unwrap())), 4),
+            "u64" =>(u64::from_str(value)
+                         .map(|x| Vec::from(x.to_le_bytes()))
+                         .unwrap_or_else(|_| Base2_16::decode(value, base2_16_variant.unwrap())), 8),
+            "u128" => (u128::from_str(value)
+                           .map(|x| Vec::from(x.to_le_bytes()))
+                           .unwrap_or_else(|_| Base2_16::decode(value, base2_16_variant.unwrap())), 16),
             _ => panic!("Invalid variant in ToIR FixedInt")
+        };
+
+        //If the value was converted via Base2_16, extra padding may be needed
+        if bytes.len() != size_required {
+            for _ in 0..size_required - bytes.len() {
+                bytes.push(0);
+            }
         }
+
+        bytes
     }
 }
 
